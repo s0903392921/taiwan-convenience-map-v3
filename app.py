@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 
 @st.cache_data
 def load_liudu_data_v5_2():
