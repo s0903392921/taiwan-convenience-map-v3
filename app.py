@@ -221,8 +221,8 @@ def load_liudu_data_v5_2():
     
     # 🌟 醫療密度指標 (完美分級權重)
     df['med_density'] = (
-        df['Medical_Centers'] * 20 + df['Regional_Hospitals'] * 16 + df['Local_Hospitals'] * 12 + 
-        df['Clinics'] * 8 + df['Pharmacies'] * 4
+        df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + 
+        df['Clinics'] * 6 + df['Pharmacies'] * 2
     ) / df['Area_SqKm']
     
     df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 3 + df['Universities'] * 15) / df['Area_SqKm']
@@ -282,11 +282,11 @@ with col_dash:
     
     with tab1:
         st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
-        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 20)*")
-        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(權重 × 16)*")
-        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 12)*")
-        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 8)*")
-        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 4)*")
+        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 18)*")
+        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(權重 × 14)*")
+        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 10)*")
+        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 6)*")
+        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 2)*")
         
     with tab2:
         st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
