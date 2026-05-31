@@ -183,6 +183,7 @@ def load_liudu_data_v5():
             ("大寮區", 71.04, 22.605, 120.395, "suburb", 1, 0, 2, 0, 0, 0, 0, 2, 105, 38)
         ]
     }
+    
    data = []
     for county, towns in raw_cities.items():
         for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
