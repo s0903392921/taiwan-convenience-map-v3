@@ -290,7 +290,7 @@ with col_dash:
     st.subheader(f"📊 {selected_county}{selected_town} · 詳細機能指標")
     st.metric(label="🏆 綜合生活便利性得分", value=f"{target_data['綜合便利性得分']} / 100 分")
     
-    tab1, tab2, tab3, tab4 = st.tabs([ "🚌 交通機能", "🏥 醫療資源", "🎓 教育資源", "🏪 生活機能"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
     
     with tab2:
         st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
