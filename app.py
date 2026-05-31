@@ -183,28 +183,25 @@ def load_liudu_data_v5():
             ("大寮區", 71.04, 22.605, 120.395, "suburb", 1, 0, 2, 0, 0, 0, 0, 2, 105, 38)
         ]
     }
-    data = []
+   data = []
     for county, towns in raw_cities.items():
-        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h in towns:
-            # 動態生成其餘基礎設施數據
+        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
+            # 交通、教育與生活機能維持其核心/郊區/偏鄉演算法動態生成
             if t_type == "core":
                 bus, mrt, ub = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
-                clinic, pharm = int(area * 15 + 30), int(area * 4 + 10)
                 elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
                 store, super_m, dept, cafe = int(area * 6 + 25), int(area * 1.2 + 5), int(area * 0.1 + 1), int(area * 4 + 10)
             elif t_type == "suburb":
                 bus, mrt, ub = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
-                clinic, pharm = int(area * 4 + 10), int(area * 1 + 3)
                 elem, high, univ = int(area * 0.4 + 2), int(area * 0.2 + 1), 0
                 store, super_m, dept, cafe = int(area * 2.5 + 10), int(area * 0.4 + 2), 0, int(area * 1 + 2)
             else:
                 bus, mrt, ub = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
-                clinic, pharm = max(int(area * 0.2), 2), max(int(area * 0.1), 1)
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
                 store, super_m, dept, cafe = max(int(area * 0.15), 2), max(int(area * 0.02), 1), 0, max(int(area * 0.05), 1)
 
             data.append({
-                "COUNTYNAME": county, "TOWNNAME": town, "Area_SqKm": area, "Center_Lat": lat, "Center_Lon": lon,
+                "COUNTYNAME": county, "TOWNNAME": town.strip(), "Area_SqKm": area, "Center_Lat": lat, "Center_Lon": lon,
                 "Bus_Stations": bus, "MRT_Stations": mrt, "Train_Stations": train, "HSR_Stations": hsr,
                 "Interchanges": ic, "Domestic_Airports": dom_ap, "International_Airports": int_ap,
                 "Medical_Centers": med_center, "Regional_Hospitals": regional_h, "Local_Hospitals": local_h,
@@ -215,31 +212,23 @@ def load_liudu_data_v5():
             
     df = pd.DataFrame(data)
     
-    # 🌟 交通密度公式 (採用使用者自訂權重)
+    # 🌟 交通密度指標
     df['trans_density'] = (
-        df['Bus_Stations'] * 4 + 
-        df['MRT_Stations'] * 10 + 
-        df['Train_Stations'] * 15 + 
-        df['HSR_Stations'] * 18 + 
-        df['Interchanges'] * 10 + 
-        df['Domestic_Airports'] * 15 + 
-        df['International_Airports'] * 25 + 
-        df['UBike_Stations'] * 2
+        df['Bus_Stations'] * 4 + df['MRT_Stations'] * 10 + df['Train_Stations'] * 15 + 
+        df['HSR_Stations'] * 18 + df['Interchanges'] * 10 + df['Domestic_Airports'] * 15 + 
+        df['International_Airports'] * 25 + df['UBike_Stations'] * 2
     ) / df['Area_SqKm']
     
-    # 🌟 醫療密度公式大升級 (採用黃金醫療分級權重：20, 16, 12, 8, 4)
+    # 🌟 醫療密度指標 (完美分級權重)
     df['med_density'] = (
-        df['Medical_Centers'] * 20 + 
-        df['Regional_Hospitals'] * 16 + 
-        df['Local_Hospitals'] * 12 + 
-        df['Clinics'] * 8 + 
-        df['Pharmacies'] * 4
+        df['Medical_Centers'] * 20 + df['Regional_Hospitals'] * 16 + df['Local_Hospitals'] * 12 + 
+        df['Clinics'] * 8 + df['Pharmacies'] * 4
     ) / df['Area_SqKm']
     
-    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools']*3 + df['Universities']*15) / df['Area_SqKm']
-    df['life_density'] = (df['Convenience_Stores'] + df['Supermarkets']*8 + df['Department_Stores']*40 + df['Coffee_Shops']*2) / df['Area_SqKm']
+    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 3 + df['Universities'] * 15) / df['Area_SqKm']
+    df['life_density'] = (df['Convenience_Stores'] + df['Supermarkets'] * 8 + df['Department_Stores'] * 40 + df['Coffee_Shops'] * 2) / df['Area_SqKm']
     
-    # 飽和得分模型
+    # 飽和評分模型 (與生活體感精準對齊)
     df['trans_density_score'] = (100 * (df['trans_density'] / (df['trans_density'] + 35))).round(1)
     df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 15))).round(1)
     df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 1.5))).round(1)
@@ -247,7 +236,7 @@ def load_liudu_data_v5():
     
     return df
 
-df_all = load_liudu_data_v5()
+df_all = load_liudu_data_v5_2()
 
 # --- 2. 連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
@@ -291,14 +280,6 @@ with col_dash:
     
     tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
     
-    with tab2:
-        st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
-        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` ｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座`")
-        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
-        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站`")
-        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 4)*")
-        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
-        
     with tab1:
         st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
         st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 20)*")
@@ -306,6 +287,14 @@ with col_dash:
         st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 12)*")
         st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 8)*")
         st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 4)*")
+        
+    with tab2:
+        st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
+        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` ｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座`")
+        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站`")
+        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 4)*")
+        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
         
     with tab3:
         st.write(f"**教育評分：{target_data['edu_density_score']} 分**")
@@ -317,7 +306,7 @@ with col_dash:
         st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
         st.markdown(f"- 🏪 連鎖便利商店：`{target_data['Convenience_Stores']} 家`")
         st.markdown(f"- 🍏 連鎖超市：`{target_data['Supermarkets']} 間`")
-        st.markdown(f"- 🏢 百獲商場/量販：`{target_data['Department_Stores']} 間`")
+        st.markdown(f"- 🏢 百貨商場/量販：`{target_data['Department_Stores']} 間`")
         st.markdown(f"- ☕ 咖啡廳與美學空間：`{target_data['Coffee_Shops']} 間`")
 
 with col_map:
@@ -326,14 +315,12 @@ with col_map:
     
     m = folium.Map(location=[lat, lon], zoom_start=12, tiles="CartoDB positron")
     
-    # 主定位點
     folium.Marker(
         location=[lat, lon],
         popup=f"<b>{selected_county}{selected_town}</b>",
         icon=folium.Icon(color="red", icon="star")
     ).add_to(m)
     
-    # 地圖動態醫學中心特徵
     if target_data['Medical_Centers'] > 0:
         folium.Marker([lat+0.005, lon-0.005], popup="🩺 國家級醫學中心落腳點", icon=folium.Icon(color="purple", icon="heartbeat", prefix="fa")).add_to(m)
         
@@ -344,4 +331,3 @@ st.markdown("---")
 st.subheader("🏆 六都生活便利性即時總排行榜 (前 15 名)")
 df_rank = df_all[['COUNTYNAME', 'TOWNNAME', '綜合便利性得分']].sort_values(by='綜合便利性得分', ascending=False).reset_index(drop=True)
 df_rank.index = df_rank.index + 1
-st.dataframe(df_rank.head(15), use_container_width=True)
