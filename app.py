@@ -224,7 +224,7 @@ def load_liudu_data_v5_2():
     
     return df
 
-df_all = load_liudu_data_v5()
+df_all = load_liudu_data_v5_2()
 
 # --- 2. 連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
