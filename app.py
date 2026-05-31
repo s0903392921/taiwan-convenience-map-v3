@@ -223,3 +223,102 @@ def load_liudu_data_v5_2():
     df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 15))).round(1)
     
     return df
+
+df_all = load_liudu_data_v5()
+
+# --- 2. 連動下拉選單 ---
+col_select1, col_select2 = st.columns(2)
+
+with col_select1:
+    available_counties = ["臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市"]
+    selected_county = st.selectbox("🗺️ 請選擇直轄市：", available_counties)
+
+with col_select2:
+    filtered_towns = df_all[df_all['COUNTYNAME'] == selected_county]['TOWNNAME'].unique()
+    selected_town = st.selectbox("📍 請選擇鄉鎮市區：", sorted(filtered_towns))
+
+# 側邊欄動態權重
+st.sidebar.header("🔧 便利性指標權重配置")
+w_store = st.sidebar.slider("🏪 生活機能", 0, 100, 30)
+w_transport = st.sidebar.slider("🚌 交通便利性", 0, 100, 30)
+w_medical = st.sidebar.slider("🏥 醫療資源", 0, 100, 20)
+w_school = st.sidebar.slider("🎓 教育資源", 0, 100, 20)
+
+if (w_store + w_transport + w_medical + w_school) != 100:
+    st.sidebar.error("❌ 權重總和必須等於 100%")
+    st.stop()
+
+df_all['綜合便利性得分'] = (
+    df_all['life_density_score'] * (w_store / 100) +
+    df_all['trans_density_score'] * (w_transport / 100) +
+    df_all['med_density_score'] * (w_medical / 100) +
+    df_all['edu_density_score'] * (w_school / 100)
+).round(1)
+
+target_data = df_all[(df_all['COUNTYNAME'] == selected_county) & (df_all['TOWNNAME'] == selected_town)].iloc[0]
+
+st.markdown("---")
+
+# --- 3. 前端佈局 ---
+col_dash, col_map = st.columns([1, 1])
+
+with col_dash:
+    st.subheader(f"📊 {selected_county}{selected_town} · 詳細機能指標")
+    st.metric(label="🏆 綜合生活便利性得分", value=f"{target_data['綜合便利性得分']} / 100 分")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源 (全新升級)", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
+    
+    with tab2:
+        st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
+        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` ｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座`")
+        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站`")
+        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 4)*")
+        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
+        
+    with tab1:
+        st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
+        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 20)*")
+        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(權重 × 16)*")
+        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 12)*")
+        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 8)*")
+        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 4)*")
+        
+    with tab3:
+        st.write(f"**教育評分：{target_data['edu_density_score']} 分**")
+        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所`")
+        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所`")
+        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`")
+        
+    with tab4:
+        st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
+        st.markdown(f"- 🏪 連鎖便利商店：`{target_data['Convenience_Stores']} 家`")
+        st.markdown(f"- 🍏 連鎖超市：`{target_data['Supermarkets']} 間`")
+        st.markdown(f"- 🏢 百獲商場/量販：`{target_data['Department_Stores']} 間`")
+        st.markdown(f"- ☕ 咖啡廳與美學空間：`{target_data['Coffee_Shops']} 間`")
+
+with col_map:
+    st.subheader("📍 行政區動態定位地圖")
+    lat, lon = target_data['Center_Lat'], target_data['Center_Lon']
+    
+    m = folium.Map(location=[lat, lon], zoom_start=12, tiles="CartoDB positron")
+    
+    # 主定位點
+    folium.Marker(
+        location=[lat, lon],
+        popup=f"<b>{selected_county}{selected_town}</b>",
+        icon=folium.Icon(color="red", icon="star")
+    ).add_to(m)
+    
+    # 地圖動態醫學中心特徵
+    if target_data['Medical_Centers'] > 0:
+        folium.Marker([lat+0.005, lon-0.005], popup="🩺 國家級醫學中心落腳點", icon=folium.Icon(color="purple", icon="heartbeat", prefix="fa")).add_to(m)
+        
+    st_folium(m, width="100%", height=450, key=f"map_{selected_county}_{selected_town}")
+
+# 排行榜
+st.markdown("---")
+st.subheader("🏆 六都生活便利性即時總排行榜 (前 15 名)")
+df_rank = df_all[['COUNTYNAME', 'TOWNNAME', '綜合便利性得分']].sort_values(by='綜合便利性得分', ascending=False).reset_index(drop=True)
+df_rank.index = df_rank.index + 1
+st.dataframe(df_rank.head(15), use_container_width=True)
