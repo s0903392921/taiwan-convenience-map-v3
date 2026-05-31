@@ -70,7 +70,7 @@ def load_liudu_data_v5_2():
             ("南港區", 21.84, 25.055, 121.606, "suburb", 1, 1, 3, 0, 0, 0, 1, 1, 95, 41),
             ("文山區", 31.50, 24.998, 121.570, "suburb", 0, 0, 2, 0, 0, 0, 1, 2, 155, 68),
             ("士林區", 62.37, 25.093, 121.526, "suburb", 0, 0, 1, 0, 0, 1, 1, 1, 245, 92),
-            ("北投區", 56.82, 25.132, 121.500, "suburb", 2, 1, 2, 0, 0, 2, 1, 2, 145, 59)
+            ("北投區", 56.82, 25.132, 121.500, "suburb", 0, 0, 0, 0, 0, 2, 1, 2, 145, 59)
         ],
         "新北市": [
             ("板橋區", 23.14, 25.011, 121.465, "core", 2, 1, 3, 0, 0, 1, 1, 4, 560, 185),
@@ -250,7 +250,7 @@ def load_liudu_data_v5_2():
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
                 store, super_m, dept, cafe = max(int(area * 0.15), 2), max(int(area * 0.02), 1), 0, max(int(area * 0.05), 1)
 
-            # --- 即時抓取 OSM 真實生活機能數據 ---
+            # --- 【關鍵新增】即時抓取 OSM 真實生活機能數據 ---
             real_store, real_super_m, real_dept = get_osm_amenity_count(lat, lon, radius=3000)
             
             if real_store is not None:
@@ -289,40 +289,27 @@ def load_liudu_data_v5_2():
             
     df = pd.DataFrame(data)
     
-    # === 🌟 交通指標優化：基礎日常大眾運輸 與 重大聯外基建 分離計算 ===
-    # 基礎都市日常運輸密度
-    df['trans_base_density'] = (
-        df['Bus_Stations'] * 1 + df['MRT_Stations'] * 4 + df['Train_Stations'] * 5 + df['UBike_Stations'] * 0.5
+    # 🌟 交通密度指標
+    df['trans_density'] = (
+        df['Bus_Stations'] * 3 + df['MRT_Stations'] * 6 + df['Train_Stations'] * 12 + 
+        df['HSR_Stations'] * 16 + df['Interchanges'] * 10 + df['Domestic_Airports'] * 12 + 
+        df['International_Airports'] * 20 + df['UBike_Stations'] * 2
     ) / df['Area_SqKm']
     
-    # 遠端重大基建加分項（不除以面積，改採絕對數量直接加分）
-    df['trans_mega_bonus'] = (
-        df['HSR_Stations'] * 15 + df['Interchanges'] * 5 + 
-        df['Domestic_Airports'] * 10 + df['International_Airports'] * 20
-    )
-    
-    # 交通飽和度計算 (分母由 35 擴大至 80 避免日常運輸溢出，再加上重大基建加分，限制最大值為 100)
-    df['trans_density_score'] = (100 * (df['trans_base_density'] / (df['trans_base_density'] + 80)))
-    df['trans_density_score'] = np.minimum(df['trans_density_score'] + df['trans_mega_bonus'], 100.0).round(1)
-    
-    
-    # === 🌟 醫療指標優化：分母從 15 擴大至 150，大幅調降診所對滿分的權重溢出 ===
+    # 🌟 醫療密度指標 (完美分級權重)
     df['med_density'] = (
-        df['Medical_Centers'] * 25 + df['Regional_Hospitals'] * 15 + df['Local_Hospitals'] * 8 + 
-        df['Clinics'] * 1 + df['Pharmacies'] * 0.5
+        df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + 
+        df['Clinics'] * 6 + df['Pharmacies'] * 2
     ) / df['Area_SqKm']
     
-    df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 150))).round(1)
+    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 3 + df['Universities'] * 15) / df['Area_SqKm']
+    df['life_density'] = (df['Convenience_Stores'] + df['Supermarkets'] * 8 + df['Department_Stores'] * 40 + df['Coffee_Shops'] * 2) / df['Area_SqKm']
     
-    
-    # === 🌟 教育指標優化：飽和分母微調擴大，拉開頂級大學和一般國小的梯隊差距 ===
-    df['edu_density'] = (df['Elementary_Schools'] * 1 + df['High_Schools'] * 2 + df['Universities'] * 5) / df['Area_SqKm']
-    df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 4.0))).round(1)
-    
-    
-    # === 🌟 生活機能優化：配合 OSM 真實撈出的大量超商數，分母由 15 擴大至 120 ===
-    df['life_density'] = (df['Convenience_Stores'] * 1 + df['Supermarkets'] * 6 + df['Department_Stores'] * 25 + df['Coffee_Shops'] * 1) / df['Area_SqKm']
-    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 120))).round(1)
+    # 飽和評分模型 (與生活體感精準對齊)
+    df['trans_density_score'] = (100 * (df['trans_density'] / (df['trans_density'] + 35))).round(1)
+    df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 15))).round(1)
+    df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 1.5))).round(1)
+    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 15))).round(1)
     
     return df
 
@@ -372,32 +359,32 @@ with col_dash:
     
     with tab1:
         st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
-        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(新權重 × 25)*")
-        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(新權重 × 15)*")
-        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(新權重 × 8)*")
-        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(新權重 × 1)*")
-        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(新權重 × 0.5)*")
+        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 18)*")
+        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(權重 × 14)*")
+        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 10)*")
+        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 6)*")
+        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 2)*")
         
     with tab2:
         st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
-        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` *(絕對加分 +20)* ｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座` *(絕對加分 +10)*")
-        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(絕對加分 +5)*")
-        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` *(絕對加分 +15)* ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站` *(密度權重 × 5)*")
-        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` *(密度權重 × 4)* ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(密度權重 × 1)*")
-        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(密度權重 × 0.5)*")
+        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` *(權重 × 20)*｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座` *(權重 × 12)*")
+        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` *(權重 × 16)* ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站` *(權重 × 12)*")
+        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` *(權重 × 6)* ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 3)*")
+        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
         
     with tab3:
         st.write(f"**教育評分：{target_data['edu_density_score']} 分**")
-        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所` *(密度權重 × 1)*")
-        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所` *(密度權重 × 2)*")
-        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所` *(密度權重 × 5)*")
+        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所`")
+        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所`")
+        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`")
         
     with tab4:
         st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
-        st.markdown(f"- 🏪 連鎖便利商店：`{target_data['Convenience_Stores']} 家` *(密度權重 × 1)*")
-        st.markdown(f"- 🍏 連鎖超市：`{target_data['Supermarkets']} 間` *(密度權重 × 6)*")
-        st.markdown(f"- 🏢 百貨商場/量販：`{target_data['Department_Stores']} 間` *(密度權重 × 25)*")
-        st.markdown(f"- ☕ 咖啡廳與美學空間：`{target_data['Coffee_Shops']} 間` *(密度權重 × 1)*")
+        st.markdown(f"- 🏪 連鎖便利商店：`{target_data['Convenience_Stores']} 家`")
+        st.markdown(f"- 🍏 連鎖超市：`{target_data['Supermarkets']} 間`")
+        st.markdown(f"- 🏢 百貨商場/量販：`{target_data['Department_Stores']} 間`")
+        st.markdown(f"- ☕ 咖啡廳與美學空間：`{target_data['Coffee_Shops']} 間`")
 
 with col_map:
     st.subheader("📍 行政區動態定位地圖")
