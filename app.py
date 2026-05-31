@@ -214,16 +214,15 @@ def load_liudu_data_v4():
             
     df = pd.DataFrame(data)
     
-    # 🌟 陸空交通終極公式：加入交流道(x5)、國內機場(x15)、國際機場(x30)
     df['trans_density'] = (
-        df['Bus_Stations'] + 
+        df['Bus_Stations']* 4 + 
         df['MRT_Stations'] * 10 + 
         df['Train_Stations'] * 15 + 
         df['HSR_Stations'] * 18 + 
-        df['Interchanges'] * 5 + 
+        df['Interchanges'] * 10 + 
         df['Domestic_Airports'] * 15 + 
-        df['International_Airports'] * 30 + 
-        df['UBike_Stations'] * 0.8
+        df['International_Airports'] * 25 + 
+        df['UBike_Stations'] * 2
     ) / df['Area_SqKm']
     
     df['med_density'] = (df['Clinics'] + df['Hospitals']*60 + df['Pharmacies']*3) / df['Area_SqKm']
@@ -284,13 +283,13 @@ with col_dash:
     
     with tab1:
         st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
-        st.markdown(f"✈️ **國際機場**：`{target_data['International_Airports']} 座` *(權重 × 30)*")
+        st.markdown(f"✈️ **國際機場**：`{target_data['International_Airports']} 座` *(權重 × 25)*")
         st.markdown(f"🛫 **國內機場**：`{target_data['Domestic_Airports']} 座` *(權重 × 15)*")
-        st.markdown(f"🚗 **高/快速道路交流道**：`{target_data['Interchanges']} 處` *(權重 × 5)*")
+        st.markdown(f"🚗 **高/快速道路交流道**：`{target_data['Interchanges']} 處` *(權重 × 10)*")
         st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` *(權重 × 18)*")
         st.markdown(f"🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站` *(權重 × 15)*")
         st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` *(權重 × 10)*")
-        st.markdown(f"🚌 公車據點總數：`{target_data['Bus_Stations']} 處` ｜ 🚲 YouBike 站點：`{target_data['UBike_Stations']} 站`")
+        st.markdown(f"🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 4)*｜ 🚲 YouBike 站點：`{target_data['UBike_Stations']} 站*(權重 × 2)*`")
         
     with tab2:
         st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
