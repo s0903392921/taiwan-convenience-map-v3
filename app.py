@@ -177,7 +177,7 @@ def load_liudu_data_v5_2():
     
     data = []
     for county, towns in raw_cities.items():
-        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
+        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h,  in towns:
             if t_type == "core":
                 bus, mrt, ub = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
                 elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
