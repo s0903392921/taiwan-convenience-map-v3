@@ -185,32 +185,117 @@ def load_liudu_data_v5_2():
     
     data = []
     for county, towns in raw_cities.items():
-        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
-            # 交通、教育與生活機能維持其核心/郊區/偏鄉演算法動態生成
+        import streamlit as st
+import pandas as pd
+import requests  # 記得在最上方匯入 requests 模組
+
+# 1. 建立一個專門去 OpenStreetMap 抓取店家數量的函式
+def get_osm_amenity_count(lat, lon, radius=3000):
+    """
+    輸入中心經緯度與搜尋半徑(公尺)，回傳該區域內超商、超市、百貨的真實數量
+    """
+    # Overpass API 的公共伺服器網址
+    url = "https://overpass-api.de/api/interpreter"
+    
+    # 建立 OSM Overpass 查詢語法
+    # shop=convenience (便利商店), shop=supermarket (超市), shop=department_store (百貨)
+    query = f"""
+    [out:json][timeout:15];
+    (
+      node["shop"="convenience"](around:{radius},{lat},{lon});
+      way["shop"="convenience"](around:{radius},{lat},{lon});
+      
+      node["shop"="supermarket"](around:{radius},{lat},{lon});
+      way["shop"="supermarket"](around:{radius},{lat},{lon});
+      
+      node["shop"="department_store"](around:{radius},{lat},{lon});
+      way["shop"="department_store"](around:{radius},{lat},{lon});
+    );
+    out tags;
+    """
+    
+    try:
+        # 發送網路請求，設定 timeout 防止網路卡死導致網頁掛掉
+        response = requests.post(url, data={"data": query}, timeout=15)
+        data = response.json()
+        
+        # 初始化數量
+        store_count = 0
+        super_m_count = 0
+        dept_count = 0
+        
+        # 遍歷抓回來的資料，根據標籤(tags)分類算數量
+        for element in data.get("elements", []):
+            tags = element.get("tags", {})
+            shop_type = tags.get("shop")
+            
+            if shop_type == "convenience":
+                store_count += 1
+            elif shop_type == "supermarket":
+                super_m_count += 1
+            elif shop_type == "department_store":
+                dept_count += 1
+                
+        return store_count, super_m_count, dept_count
+        
+    except Exception as e:
+        # 如果網路超時或 API 沒回應，回傳 None，後面可以用原來的公式保底
+        return None, None, None
+
+
+# 2. 你的主要資料載入函式（原本的 load_liudu_data）
+@st.cache_data
+def load_liudu_data_v5_2():
+    raw_cities = { ... } # 你的原始城市資料保持不變
+    
+    data = []
+    for county, towns in raw_cities.items():
+        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm, ub in towns:
+            
+            # --- 原本的公式計算（保留作為網路斷線時的保底數據） ---
             if t_type == "core":
-                bus, mrt, ub = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
+                bus, mrt, ub_calc = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
                 elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
                 store, super_m, dept, cafe = int(area * 6 + 25), int(area * 1.2 + 5), int(area * 0.1 + 1), int(area * 4 + 10)
             elif t_type == "suburb":
-                bus, mrt, ub = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
+                bus, mrt, ub_calc = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
                 elem, high, univ = int(area * 0.4 + 2), int(area * 0.2 + 1), 0
                 store, super_m, dept, cafe = int(area * 2.5 + 10), int(area * 0.4 + 2), 0, int(area * 1 + 2)
             else:
-                bus, mrt, ub = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
+                bus, mrt, ub_calc = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
                 store, super_m, dept, cafe = max(int(area * 0.15), 2), max(int(area * 0.02), 1), 0, max(int(area * 0.05), 1)
 
+            # --- 【關鍵新增】即時抓取 OSM 真實生活機能數據 ---
+            # 這裡設定半徑 3000 公尺（3公里），你可以自行調整
+            real_store, real_super_m, real_dept = get_osm_amenity_count(lat, lon, radius=3000)
+            
+            # 如果成功抓到真實數據，就強行覆蓋掉公式算出來的數字
+            if real_store is not None:
+                store = real_store
+                super_m = real_super_m
+                dept = real_dept
+            
+            # 儲存到 data 陣列中
             data.append({
-                "COUNTYNAME": county, "TOWNNAME": town.strip(), "Area_SqKm": area, "Center_Lat": lat, "Center_Lon": lon,
-                "Bus_Stations": bus, "MRT_Stations": mrt, "Train_Stations": train, "HSR_Stations": hsr,
-                "Interchanges": ic, "Domestic_Airports": dom_ap, "International_Airports": int_ap,
-                "Medical_Centers": med_center, "Regional_Hospitals": regional_h, "Local_Hospitals": local_h,
-                "Clinics": clinic, "Pharmacies": pharm, "UBike_Stations": ub,
-                "Elementary_Schools": elem, "High_Schools": high, "Universities": univ,
-                "Convenience_Stores": store, "Supermarkets": super_m, "Department_Stores": dept, "Coffee_Shops": cafe
+                "COUNTYNAME": county, 
+                "TOWNNAME": town.strip(), 
+                "Area_SqKm": area, 
+                "Center_Lat": lat, 
+                "Center_Lon": lon,
+                "Convenience_Stores": store,       # 現在這裡會顯示真實數量了！
+                "Supermarkets": super_m,          # 現在這裡會顯示真實數量了！
+                "Department_Stores": dept,         # 現在這裡會顯示真實數量了！
+                "Cafes": cafe,
+                "Medical_Centers": med_center,
+                "Regional_Hospitals": regional_h,
+                "Local_Hospitals": local_h,
+                "Clinics": clinic,
+                "Pharmacies": pharm,
+                "UBike_Stations": ub
             })
             
-    df = pd.DataFrame(data)
+    return pd.DataFrame(data)
     
     # 🌟 交通密度指標
     df['trans_density'] = (
