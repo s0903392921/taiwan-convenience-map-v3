@@ -246,6 +246,33 @@ def get_osm_amenity_count(lat, lon, radius=3000):
 
 # 2. 你的主要資料載入函式（原本的 load_liudu_data）
 @st.cache_data
+def get_osm_amenity_count(lat, lon, radius=3000):
+    url = "https://overpass-api.de/api/interpreter"
+    query = f"""
+    [out:json][timeout:15];
+    (
+      node["shop"="convenience"](around:{radius},{lat},{lon});
+      way["shop"="convenience"](around:{radius},{lat},{lon});
+      node["shop"="supermarket"](around:{radius},{lat},{lon});
+      way["shop"="supermarket"](around:{radius},{lat},{lon});
+      node["shop"="department_store"](around:{radius},{lat},{lon});
+      way["shop"="department_store"](around:{radius},{lat},{lon});
+    );
+    out tags;
+    """
+    try:
+        response = requests.post(url, data={"data": query}, timeout=15)
+        data = response.json()
+        store_count, super_m_count, dept_count = 0, 0, 0
+        for element in data.get("elements", []):
+            tags = element.get("tags", {})
+            shop_type = tags.get("shop")
+            if shop_type == "convenience": store_count += 1
+            elif shop_type == "supermarket": super_m_count += 1
+            elif shop_type == "department_store": dept_count += 1
+        return store_count, super_m_count, dept_count
+    except Exception:
+        return None, None, None
 def load_liudu_data_v5_2():
     raw_cities = { ... } # 你的原始城市資料保持不變
     
