@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-
 @st.cache_data
 def load_liudu_data_v5_2():
     # 格式: (行政區, 面積, 緯度, 經度, 型態, 火車, 高鐵, 交流道, 國內機場, 國際機場, 醫學中心, 區域醫院, 地區醫院, 診所, 藥局)
