@@ -177,7 +177,15 @@ def load_liudu_data_v5_2():
     
     data = []
     for county, towns in raw_cities.items():
-        for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm, in towns:
+        for dist in towns:
+            # 1. 這裡只解包資料庫內實際擁有的 13 個原始數據欄位
+            town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h = dist
+            
+            # 2. 在這裡手動設定預設的「診所 (clinic)」與「藥局 (pharm)」數字為 0
+            #    這樣既可以防呆，又能保留變數讓你在下方公式中繼續計算
+            clinic = 0
+            pharm = 0
+
             if t_type == "core":
                 bus, mrt, ub = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
                 elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
@@ -185,24 +193,41 @@ def load_liudu_data_v5_2():
             elif t_type == "suburb":
                 bus, mrt, ub = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
                 elem, high, univ = int(area * 0.4 + 2), int(area * 0.2 + 1), 0
-                store, super_m, dept, cafe = int(area * 2.5 + 10), int(area * 0.4 + 2), 0, int(area * 1 + 2)
+                store, super_m, dept, cafe = int(area * 2.5 + 10), int(area * 0.4 + 2), 0, int(area * 1 * 2)
             else:
                 bus, mrt, ub = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
                 store, super_m, dept, cafe = max(int(area * 0.15), 2), max(int(area * 0.02), 1), 0, max(int(area * 0.05), 1)
 
             data.append({
-                "COUNTYNAME": county, "TOWNNAME": town.strip(), "Area_SqKm": area, "Center_Lat": lat, "Center_Lon": lon,
-                "Bus_Stations": bus, "MRT_Stations": mrt, "Train_Stations": train, "HSR_Stations": hsr,
-                "Interchanges": ic, "Domestic_Airports": dom_ap, "International_Airports": int_ap,
-                "Medical_Centers": med_center, "Regional_Hospitals": regional_h, "Local_Hospitals": local_h,
-                "Clinics": clinic, "Pharmacies": pharm, "UBike_Stations": ub,
-                "Elementary_Schools": elem, "High_Schools": high, "Universities": univ,
-                "Convenience_Stores": store, "Supermarkets": super_m, "Department_Stores": dept, "Coffee_Shops": cafe
+                "COUNTYNAME": county,
+                "TOWNNAME": town.strip(),
+                "Area_SqKm": area,
+                "Center_Lat": lat,
+                "Center_Lon": lon,
+                "Medical_Centers": med_center,
+                "Regional_Hospitals": regional_h,
+                "Local_Hospitals": local_h,
+                "Clinics": clinic,
+                "Pharmacies": pharm,
+                "Train_Stations": train,
+                "HSR_Stations": hsr,
+                "Interchanges": ic,
+                "Domestic_Airports": dom_ap,
+                "International_Airports": int_ap,
+                "Bus_Stops": bus,
+                "MRT_Stations": mrt,
+                "UBike_Stations": ub,
+                "Elementary_Schools": elem,
+                "High_Schools": high,
+                "Universities": univ,
+                "Convenience_Stores": store,
+                "Supermarkets": super_m,
+                "Department_Stores": dept,
+                "Cafes": cafe
             })
             
-    df = pd.DataFrame(data)
-    
+    return pd.DataFrame(data)
     df['trans_density'] = (
         df['Bus_Stations'] * 4 + df['MRT_Stations'] * 10 + df['Train_Stations'] * 15 + 
         df['HSR_Stations'] * 18 + df['Interchanges'] * 10 + df['Domestic_Airports'] * 15 + 
