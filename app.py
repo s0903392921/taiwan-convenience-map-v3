@@ -214,7 +214,7 @@ def load_liudu_data_v5_2():
     
     # 🌟 交通密度指標
     df['trans_density'] = (
-        df['Bus_Stations'] * 4 + df['MRT_Stations'] * 10 + df['Train_Stations'] * 15 + 
+        df['Bus_Stations'] * 3 + df['MRT_Stations'] * 8 + df['Train_Stations'] * 14 + 
         df['HSR_Stations'] * 18 + df['Interchanges'] * 10 + df['Domestic_Airports'] * 15 + 
         df['International_Airports'] * 25 + df['UBike_Stations'] * 2
     ) / df['Area_SqKm']
@@ -290,10 +290,10 @@ with col_dash:
         
     with tab2:
         st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
-        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` ｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座`")
+        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` *(權重 × 25)*｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座` *(權重 × 15)*")
         st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
-        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站`")
-        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 4)*")
+        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` *(權重 × 18)* ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站` *(權重 × 14)*")
+        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` *(權重 × 8)* ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 3)*")
         st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
         
     with tab3:
