@@ -4,7 +4,7 @@ import folium
 from streamlit_folium import st_folium
 import numpy as np
 
-st.set_page_config(page_title="台灣六都生活便利性精細評分系統 V5.2", layout="wide")
+st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.2", layout="wide")
 
 st.title("🏙️ 台灣六都生活便利性精細評分系統 ")
 
