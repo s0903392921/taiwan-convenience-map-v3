@@ -351,6 +351,9 @@ with col_map:
 st.markdown("---")
 st.header("🏆 六都生活便利性即時總排行榜 (前 15 名)")
 
+# 🚀 確保開頭有匯入 plotly（如果沒有請在程式碼最上方補上 import plotly.express as px）
+import plotly.express as px
+
 with st.spinner("正在動態計算全台行政區當前權重排名..."):
     leaderboard_list = []
     
@@ -384,21 +387,34 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         })
         
     df_leaderboard = pd.DataFrame(leaderboard_list)
-    
-    # 🚀 修正重點 1：排序後直接切出前 15 名，並徹底 reset_index 斷絕與舊 Dataframe 的關聯
     df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
     df_top15['排名'] = df_top15.index + 1
 
 col_chart, col_table = st.columns([4, 3])
 with col_chart:
-    # 🚀 修正重點 2：建立乾淨的圖表專用 DataFrame，並把「區域」設為唯一的 Index
-    chart_df = pd.DataFrame({
-        '區域': df_top15['縣市'] + df_top15['行政區'],
-        '綜合便利性得分': df_top15['綜合便利性得分']
-    }).set_index('區域')
+    chart_df = df_top15.copy()
+    chart_df['區域'] = chart_df['縣市'] + chart_df['行政區']
     
-    # 🚀 修正重點 3：不給額外參數，直接餵乾淨的 Series/DataFrame 給 st.bar_chart
-    st.bar_chart(chart_df)
+    # 🚀 修正重點：改用 Plotly 畫圖，強制鎖定排序，並設定 Y 軸最大上限為 100
+    fig = px.bar(
+        chart_df, 
+        x='區域', 
+        y='綜合便利性得分',
+        text='綜合便利性得分', # 在柱狀圖上直接顯示分數
+        color='綜合便利性得分', # 讓分數高低有漸層顏色，更好看
+        color_continuous_scale='Blues'
+    )
+    
+    # 強制規定 X 軸不要自動排序（嚴格按照 DataFrame 的順序），並限制 Y 軸範圍
+    fig.update_layout(
+        xaxis={'categoryorder': 'trace'}, 
+        yaxis_range=[0, 100],
+        coloraxis_showscale=False, # 隱藏右邊的漸層顏色條
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+    
+    # 渲染圖表
+    st.plotly_chart(fig, use_container_width=True)
 
 with col_table:
     st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
