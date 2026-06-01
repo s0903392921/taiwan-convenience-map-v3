@@ -356,8 +356,6 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
     
     for idx, row in df_static.iterrows():
         r_area = row['Area_SqKm']
-        
-        # 避免面積為 0 導致除以零錯誤
         if r_area <= 0:
             r_area = 1.0
         
@@ -376,32 +374,31 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         r_med_score = 100 * (r_med_density / (r_med_density + 15))
         r_trans_score = 100 * (r_trans_density / (r_trans_density + 12))
         r_edu_score = 100 * (r_edu_density / (r_edu_density + 2.5))
-        
-        # 🚀 修正 1：同步將生活機能的飽和常數分母從 450 改為 150，排行榜才會同步正確！
         r_life_score = 100 * (r_life_weight / (r_life_weight + 150))
         
-        # 計算加權總分
         r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
-        
-        # 🚀 修正 2：加上安全鎖，確保綜合分數嚴格控制在 0 ~ 100 之間
         r_final = max(0.0, min(100.0, round(r_final, 1)))
         
         leaderboard_list.append({
-            "排名": 0, "縣市": row['COUNTYNAME'], "行政區": row['TOWNNAME'], "綜合便利性得分": r_final, "分類": row['Type'].upper()
+            "縣市": row['COUNTYNAME'], "行政區": row['TOWNNAME'], "綜合便利性得分": r_final, "分類": row['Type'].upper()
         })
         
     df_leaderboard = pd.DataFrame(leaderboard_list)
-    df_leaderboard = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).reset_index(drop=True)
-    df_leaderboard['排名'] = df_leaderboard.index + 1
-    df_top15 = df_leaderboard.head(15)
+    
+    # 🚀 修正重點 1：排序後直接切出前 15 名，並徹底 reset_index 斷絕與舊 Dataframe 的關聯
+    df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
+    df_top15['排名'] = df_top15.index + 1
 
 col_chart, col_table = st.columns([4, 3])
 with col_chart:
-    chart_data = df_top15.copy()
-    chart_data['區域'] = chart_data['縣市'] + chart_data['行政區']
+    # 🚀 修正重點 2：建立乾淨的圖表專用 DataFrame，並把「區域」設為唯一的 Index
+    chart_df = pd.DataFrame({
+        '區域': df_top15['縣市'] + df_top15['行政區'],
+        '綜合便利性得分': df_top15['綜合便利性得分']
+    }).set_index('區域')
     
-    # 🚀 修正 3：明確指定 x 與 y 軸欄位給 st.bar_chart，徹底解決永和區暴衝與負數的欄位錯位 bug
-    st.bar_chart(data=chart_data, x='區域', y='綜合便利性得分')
+    # 🚀 修正重點 3：不給額外參數，直接餵乾淨的 Series/DataFrame 給 st.bar_chart
+    st.bar_chart(chart_df)
 
 with col_table:
     st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
