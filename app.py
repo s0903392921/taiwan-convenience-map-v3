@@ -290,7 +290,7 @@ life_score_weight = (c_stores * 4 + s_markets * 6 + f_foods * 5 + m_malls * 15 +
 med_score = round(100 * (med_density / (med_density + 15)), 1)
 trans_score = round(100 * (trans_density / (trans_density + 12)), 1)
 edu_score = round(100 * (edu_density / (edu_density + 2.5)), 1)
-life_score = round(100 * (life_score_weight / (life_score_weight + 450)), 1)
+life_score = round(100 * (life_score_weight / (life_score_weight + 150)), 1)
 
 final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
 
