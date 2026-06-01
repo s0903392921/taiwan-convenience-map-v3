@@ -357,6 +357,10 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
     for idx, row in df_static.iterrows():
         r_area = row['Area_SqKm']
         
+        # 避免面積為 0 導致除以零錯誤
+        if r_area <= 0:
+            r_area = 1.0
+        
         r_trans_density = (row['Bus_Stations'] * 0.4 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['UBike_Stations'] * 0.8) / r_area
         r_med_density = (row['Medical_Centers'] * 18 + row['Regional_Hospitals'] * 14 + row['Local_Hospitals'] * 10 + row['Clinics'] * 6 + row['Pharmacies'] * 2) / r_area
         r_edu_density = (row['Elementary_Schools'] + row['High_Schools'] * 3 + row['Universities'] * 15 + row['Libraries'] * 8) / r_area
@@ -372,9 +376,15 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         r_med_score = 100 * (r_med_density / (r_med_density + 15))
         r_trans_score = 100 * (r_trans_density / (r_trans_density + 12))
         r_edu_score = 100 * (r_edu_density / (r_edu_density + 2.5))
-        r_life_score = 100 * (r_life_weight / (r_life_weight + 450))
         
-        r_final = round(r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100), 1)
+        # 🚀 修正 1：同步將生活機能的飽和常數分母從 450 改為 150，排行榜才會同步正確！
+        r_life_score = 100 * (r_life_weight / (r_life_weight + 150))
+        
+        # 計算加權總分
+        r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
+        
+        # 🚀 修正 2：加上安全鎖，確保綜合分數嚴格控制在 0 ~ 100 之間
+        r_final = max(0.0, min(100.0, round(r_final, 1)))
         
         leaderboard_list.append({
             "排名": 0, "縣市": row['COUNTYNAME'], "行政區": row['TOWNNAME'], "綜合便利性得分": r_final, "分類": row['Type'].upper()
@@ -389,9 +399,9 @@ col_chart, col_table = st.columns([4, 3])
 with col_chart:
     chart_data = df_top15.copy()
     chart_data['區域'] = chart_data['縣市'] + chart_data['行政區']
-    chart_data = chart_data.set_index('區域')['綜合便利性得分']
-    st.bar_chart(chart_data)
+    
+    # 🚀 修正 3：明確指定 x 與 y 軸欄位給 st.bar_chart，徹底解決永和區暴衝與負數的欄位錯位 bug
+    st.bar_chart(data=chart_data, x='區域', y='綜合便利性得分')
 
 with col_table:
     st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
-total_score = max(0.0, min(100.0, round(total_score, 1)))
