@@ -313,11 +313,15 @@ with col_dash:
         st.markdown(f"💊 **健保特約藥局**：`{static_target['Pharmacies']} 家` *(權重 × 2)*")
         
     with tab2:
-        st.write(f"**交通機能評分：{trans_score} 分** (✨ 全指標真實數據對齊)")
-        st.markdown(f"🚇 **捷運/輕軌站點**：`{static_target['MRT_Stations']} 站` *(權重 × 6)* ｜ 🚄 **高鐵車站**：`{static_target['HSR_Stations']} 站` *(權重 × 16)*")
-        st.markdown(f"🚆 **火車(台鐵)車站**：`{static_target['Train_Stations']} 站` *(權重 × 12)* ｜ 🛣️ **高/快速道路交流道**：`{static_target['Interchanges']} 處` *(權重 × 10)*")
-        st.markdown(f"🚌 **公車站點**：`{static_target['Bus_Stations']} 處` *(權重 × 2)* ｜ 🚲 **YouBike 站點**：`{static_target['UBike_Stations']} 站` *(權重 × 1)*")
-        st.markdown(f"✈️ **國際機場**：`{static_target['International_Airports']} 座` *(權重 × 18)* ｜ 🛫 **國內機場**：`{static_target['Domestic_Airports']} 座` *(權重 × 12)*")
+        st.write(f"**交通機能評分：{trans_score} 分** ")
+        st.markdown(f"🚇 **捷運/輕軌站點**：`{static_target['MRT_Stations']} 站` *(權重 × 6)*") 
+        st.markdown(f"🚄 **高鐵車站**：`{static_target['HSR_Stations']} 站` *(權重 × 16)*")
+        st.markdown(f"🚆 **台鐵車站**：`{static_target['Train_Stations']} 站` *(權重 × 12)*") 
+        st.markdown(f"🛣️ **高/快速道路交流道**：`{static_target['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🚌 **公車站點**：`{static_target['Bus_Stations']} 處` *(權重 × 2)* ")
+        st.markdown(f"🚲 **YouBike 站點**：`{static_target['UBike_Stations']} 站` *(權重 × 1)*")
+        st.markdown(f"✈️ **國際機場**：`{static_target['International_Airports']} 座` *(權重 × 18)* ")
+        st.markdown(f"🛫 **國內機場**：`{static_target['Domestic_Airports']} 座` *(權重 × 12)*")
         
     with tab3:
         st.write(f"**教育資源評分：{edu_score} 分**")
