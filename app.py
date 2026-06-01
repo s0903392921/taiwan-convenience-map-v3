@@ -374,10 +374,10 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
                 r_life_weight = (42 * 4 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
                 
         # 🚀 修正 2：排行榜的飽和分母常數同步調小（8, 6, 1.2, 80），分數集體調高且兩邊不打架
-        r_med_score = 100 * (r_med_density / (r_med_density + 8))
-        r_trans_score = 100 * (r_trans_density / (r_trans_density + 6))
-        r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.2))
-        r_life_score = 100 * (r_life_weight / (r_life_weight + 80))
+        r_med_score = 100 * (r_med_density / (r_med_density + 13))
+        r_trans_score = 100 * (r_trans_density / (r_trans_density + 10))
+        r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.5))
+        r_life_score = 100 * (r_life_weight / (r_life_weight + 120))
         
         # 計算最終加權總分
         r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
