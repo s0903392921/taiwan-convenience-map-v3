@@ -338,7 +338,7 @@ def load_liudu_data_v5_2():
     ) / df['Area_SqKm']
     
     # 🌟 教育密度指標
-    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 3 + df['Universities'] * 15) / df['Area_SqKm']
+    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 5 + df['Universities'] * 15) / df['Area_SqKm']
     
     # 🌟【最新權重公式修正】(1)*4 + (2)*6 + (3)*5 + (4)*15 + (5)*6 + (6)*5 + (7)*3
     df['life_density'] = (
@@ -421,9 +421,9 @@ with col_dash:
         
     with tab3:
         st.write(f"**教育評分：{target_data['edu_density_score']} 分**")
-        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所`")
-        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所`")
-        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`")
+        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所`*(權重 × 1)*")
+        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所`*(權重 × 5)*")
+        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`*(權重 × 15)*")
         
     with tab4:
         # 🌟【最新前端修正】與你的 7 大生活機能指標欄位完美對齊
