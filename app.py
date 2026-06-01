@@ -359,10 +359,12 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         if r_area <= 0:
             r_area = 1.0
         
-        r_trans_density = (row['Bus_Stations'] * 0.4 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['UBike_Stations'] * 0.8) / r_area
+        # 🚀 修正 1：排行榜的交通密度權重，與第 5 區塊完全對齊，包含加計機場、公車/UBike 權重同步
+        r_trans_density = (row['Bus_Stations'] * 2 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['Domestic_Airports'] * 12 + row['International_Airports'] * 18 + row['UBike_Stations'] * 1) / r_area
         r_med_density = (row['Medical_Centers'] * 18 + row['Regional_Hospitals'] * 14 + row['Local_Hospitals'] * 10 + row['Clinics'] * 6 + row['Pharmacies'] * 2) / r_area
         r_edu_density = (row['Elementary_Schools'] + row['High_Schools'] * 3 + row['Universities'] * 15 + row['Libraries'] * 8) / r_area
         
+        # 判斷是否為當前選取的行政區，如果是則抓取 OSM 即時商圈權重，否則抓靜態預設值
         if row['COUNTYNAME'] == selected_county and row['TOWNNAME'] == selected_town:
             r_life_weight = life_score_weight
         else:
@@ -371,11 +373,13 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
             else:
                 r_life_weight = (42 * 4 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
                 
-        r_med_score = 100 * (r_med_density / (r_med_density + 15))
-        r_trans_score = 100 * (r_trans_density / (r_trans_density + 12))
-        r_edu_score = 100 * (r_edu_density / (r_edu_density + 2.5))
-        r_life_score = 100 * (r_life_weight / (r_life_weight + 150))
+        # 🚀 修正 2：排行榜的飽和分母常數同步調小（8, 6, 1.2, 80），分數集體調高且兩邊不打架
+        r_med_score = 100 * (r_med_density / (r_med_density + 8))
+        r_trans_score = 100 * (r_trans_density / (r_trans_density + 6))
+        r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.2))
+        r_life_score = 100 * (r_life_weight / (r_life_weight + 80))
         
+        # 計算最終加權總分
         r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
         r_final = max(0.0, min(100.0, round(r_final, 1)))
         
@@ -387,7 +391,7 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
     df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
     df_top15['排名'] = df_top15.index + 1
 
-# 🚀 修正重點：拿掉 st.columns 雙欄版面，改為滿版單欄顯示表格
+# 滿版單欄顯示表格
 st.dataframe(
     df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], 
     use_container_width=True, 
