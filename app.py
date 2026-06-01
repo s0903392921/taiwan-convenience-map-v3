@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 
 st.set_page_config(page_title="台灣六都生活便利性評分系統 V6.0", layout="wide")
-st.title("🏙️ 台灣六都生活便利性精細評分系統 (152行政區完全全域解鎖版)")
+st.title("🏙️ 台灣六都生活便利性評分系統 ")
 
 # --- 1. 即時查詢 OSM 7 大生活機能函數 ---
 def get_live_amenity_data(lat, lon, radius=3000):
@@ -384,21 +384,12 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         })
         
     df_leaderboard = pd.DataFrame(leaderboard_list)
-    
-    # 先算出全台前 15 名
     df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
     df_top15['排名'] = df_top15.index + 1
 
-col_chart, col_table = st.columns([4, 3])
-with col_chart:
-    # 🚀 終極修正：只抓取排行榜前 15 名需要渲染的資料，不帶任何舊的 index 
-    chart_df = pd.DataFrame({
-        '區域': df_top15['縣市'] + df_top15['行政區'],
-        '綜合便利性得分': df_top15['綜合便利性得分']
-    })
-    
-    # 🚀 嚴格指定 x 與 y，這樣 Streamlit 畫圖時，長條圖的順序就會跟右邊表格完全一樣（從第 1 名中區排到第 15 名）
-    st.bar_chart(data=chart_df, x='區域', y='綜合便利性得分')
-
-with col_table:
-    st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
+# 🚀 修正重點：拿掉 st.columns 雙欄版面，改為滿版單欄顯示表格
+st.dataframe(
+    df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], 
+    use_container_width=True, 
+    hide_index=True
+)
