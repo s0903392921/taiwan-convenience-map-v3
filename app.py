@@ -351,9 +351,6 @@ with col_map:
 st.markdown("---")
 st.header("🏆 六都生活便利性即時總排行榜 (前 15 名)")
 
-# 🚀 確保開頭有匯入 plotly（如果沒有請在程式碼最上方補上 import plotly.express as px）
-import plotly.express as px
-
 with st.spinner("正在動態計算全台行政區當前權重排名..."):
     leaderboard_list = []
     
@@ -387,34 +384,21 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         })
         
     df_leaderboard = pd.DataFrame(leaderboard_list)
+    
+    # 先算出全台前 15 名
     df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
     df_top15['排名'] = df_top15.index + 1
 
 col_chart, col_table = st.columns([4, 3])
 with col_chart:
-    chart_df = df_top15.copy()
-    chart_df['區域'] = chart_df['縣市'] + chart_df['行政區']
+    # 🚀 終極修正：只抓取排行榜前 15 名需要渲染的資料，不帶任何舊的 index 
+    chart_df = pd.DataFrame({
+        '區域': df_top15['縣市'] + df_top15['行政區'],
+        '綜合便利性得分': df_top15['綜合便利性得分']
+    })
     
-    # 🚀 修正重點：改用 Plotly 畫圖，強制鎖定排序，並設定 Y 軸最大上限為 100
-    fig = px.bar(
-        chart_df, 
-        x='區域', 
-        y='綜合便利性得分',
-        text='綜合便利性得分', # 在柱狀圖上直接顯示分數
-        color='綜合便利性得分', # 讓分數高低有漸層顏色，更好看
-        color_continuous_scale='Blues'
-    )
-    
-    # 強制規定 X 軸不要自動排序（嚴格按照 DataFrame 的順序），並限制 Y 軸範圍
-    fig.update_layout(
-        xaxis={'categoryorder': 'trace'}, 
-        yaxis_range=[0, 100],
-        coloraxis_showscale=False, # 隱藏右邊的漸層顏色條
-        margin=dict(l=20, r=20, t=20, b=20)
-    )
-    
-    # 渲染圖表
-    st.plotly_chart(fig, use_container_width=True)
+    # 🚀 嚴格指定 x 與 y，這樣 Streamlit 畫圖時，長條圖的順序就會跟右邊表格完全一樣（從第 1 名中區排到第 15 名）
+    st.bar_chart(data=chart_df, x='區域', y='綜合便利性得分')
 
 with col_table:
     st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
