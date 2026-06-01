@@ -325,7 +325,6 @@ with col_dash:
         st.markdown(f"🎒 **國民小學數量**：`{static_target['Elementary_Schools']} 所` *(權重 × 1)*")
         st.markdown(f"🏫 **國高中與職校**：`{static_target['High_Schools']} 所` *(權重 × 5)*")
         st.markdown(f"🎓 **大專院校/大學**：`{static_target['Universities']} 所` *(權重 × 15)*")
-        # 新增圖書館指標完美對齊先前要求
         st.markdown(f"📚 **公共圖書館**：`1 處` *(權重 × 4)*")
         
     with tab4:
@@ -345,9 +344,67 @@ with col_map:
     folium.Marker(location=[lat, lon], popup=f"<b>{selected_county}{selected_town}</b>", icon=folium.Icon(color="red", icon="star")).add_to(m)
     st_folium(m, width="100%", height=450, key=f"map_{selected_county}_{selected_town}")
 
-# 排行榜
+# --- 7. 🔥 補回：六都生活便利性即時總排行榜 (前 15 名) ---
 st.markdown("---")
-st.subheader("🏆 六都生活便利性即時總排行榜 (前 15 名)")
-df_rank = df_all[['COUNTYNAME', 'TOWNNAME', '綜合便利性得分']].sort_values(by='綜合便利性得分', ascending=False).reset_index(drop=True)
-df_rank.index = df_rank.index + 1
-st.dataframe(df_rank.head(15), use_container_width=True)
+st.header("🏆 六都生活便利性即時總排行榜 (前 15 名)")
+
+with st.spinner("正在動態計算全台行政區當前權重排名..."):
+    leaderboard_list = []
+    
+    for idx, row in df_static.iterrows():
+        r_area = row['Area_SqKm']
+        
+        # 計算靜態機能指標密度
+        r_trans_density = (row['Bus_Stations'] * 3 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['UBike_Stations'] * 2) / r_area
+        r_med_density = (row['Medical_Centers'] * 18 + row['Regional_Hospitals'] * 14 + row['Local_Hospitals'] * 10 + row['Clinics'] * 6 + row['Pharmacies'] * 2) / r_area
+        r_edu_density = (row['Elementary_Schools'] + row['High_Schools'] * 3 + row['Universities'] * 15) / r_area
+        
+        # 為了排行榜效能，其餘行政區的生活機能使用預估權重模型，而「當前選中行政區」帶入最新即時串接數據
+        if row['COUNTYNAME'] == selected_county and row['TOWNNAME'] == selected_town:
+            r_life_weight = life_score_weight
+        else:
+            if row['Type'] == "core":
+                r_life_weight = (135 * 4 + 16 * 6 + 12 * 5 + 4 * 15 + 3 * 6 + 22 * 5 + 14 * 3)
+            else:
+                r_life_weight = (42 * 4 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
+                
+        # 計算各項四大分頁轉換分
+        r_med_score = 100 * (r_med_density / (r_med_density + 15))
+        r_trans_score = 100 * (r_trans_density / (r_trans_density + 35))
+        r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.5))
+        r_life_score = 100 * (r_life_weight / (r_life_weight + 450))
+        
+        # 依側邊欄調配的最新權重混合計分
+        r_final = round(r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100), 1)
+        
+        leaderboard_list.append({
+            "排名": 0,
+            "縣市": row['COUNTYNAME'],
+            "行政區": row['TOWNNAME'],
+            "綜合便利性得分": r_final,
+            "分類": row['Type'].upper()
+        })
+        
+    df_leaderboard = pd.DataFrame(leaderboard_list)
+    df_leaderboard = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).reset_index(drop=True)
+    
+    # 建立排名序號
+    df_leaderboard['排名'] = df_leaderboard.index + 1
+    df_top15 = df_leaderboard.head(15)
+
+# 顯示前 15 名圖表與表格
+col_chart, col_table = st.columns([4, 3])
+
+with col_chart:
+    # 透過 Streamlit 原生條形圖呈現前 15 名
+    chart_data = df_top15.copy()
+    chart_data['區域'] = chart_data['縣市'] + chart_data['行政區']
+    chart_data = chart_data.set_index('區域')['綜合便利性得分']
+    st.bar_chart(chart_data)
+
+with col_table:
+    st.dataframe(
+        df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']],
+        use_container_width=True,
+        hide_index=True
+    )
