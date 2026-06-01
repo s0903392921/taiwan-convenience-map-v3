@@ -352,7 +352,7 @@ st.markdown("---")
 col_dash, col_map = st.columns([1, 1])
 
 with col_dash:
-    st.subheader(f"📊 {selected_county}{selected_town} · 詳細機能指標")
+    st.subheader(f"📊 {selected_county}{selected_town} ")
     st.metric(label="🏆 綜合生活便利性得分", value=f"{target_data['綜合便利性得分']} / 100 分")
     
     tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
