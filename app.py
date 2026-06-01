@@ -344,3 +344,10 @@ with col_map:
     m = folium.Map(location=[lat, lon], zoom_start=13, tiles="CartoDB positron")
     folium.Marker(location=[lat, lon], popup=f"<b>{selected_county}{selected_town}</b>", icon=folium.Icon(color="red", icon="star")).add_to(m)
     st_folium(m, width="100%", height=450, key=f"map_{selected_county}_{selected_town}")
+
+# 排行榜
+st.markdown("---")
+st.subheader("🏆 六都生活便利性即時總排行榜 (前 15 名)")
+df_rank = df_all[['COUNTYNAME', 'TOWNNAME', '綜合便利性得分']].sort_values(by='綜合便利性得分', ascending=False).reset_index(drop=True)
+df_rank.index = df_rank.index + 1
+st.dataframe(df_rank.head(15), use_container_width=True)
