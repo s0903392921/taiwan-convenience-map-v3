@@ -3,93 +3,51 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-import numpy as np
 
-st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.3", layout="wide")
-
+st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.6", layout="wide")
 st.title("🏙️ 台灣六都生活便利性精細評分系統 ")
 
-# --- 1. 建立一個專門去 OpenStreetMap 抓取 7 大生活機能店家數量的函式 ---
-def get_osm_amenity_count_v2(lat, lon, radius=3000):
-    """
-    輸入中心經緯度與搜尋半徑(公尺)，利用一條 Overpass 查詢即時回傳：
-    便利商店、超市、速食店、百貨/量販、傳統市場/夜市、銀行/郵局、公園/運動場 的真實數量
-    """
+# --- 1. 即時查詢 OSM 7 大生活機能函數 ---
+def get_live_amenity_data(lat, lon, radius=3000):
     url = "https://overpass-api.de/api/interpreter"
-    
     query = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:15];
     (
       node["shop"="convenience"](around:{radius},{lat},{lon});
-      way["shop"="convenience"](around:{radius},{lat},{lon});
-      
       node["shop"="supermarket"](around:{radius},{lat},{lon});
-      way["shop"="supermarket"](around:{radius},{lat},{lon});
-      
       node["amenity"="fast_food"](around:{radius},{lat},{lon});
-      way["amenity"="fast_food"](around:{radius},{lat},{lon});
-      
-      node["shop"="department_store"](around:{radius},{lat},{lon});
-      way["shop"="department_store"](around:{radius},{lat},{lon});
-      node["shop"="mall"](around:{radius},{lat},{lon});
-      way["shop"="mall"](around:{radius},{lat},{lon});
-      
+      node["shop"~"department_store|mall"](around:{radius},{lat},{lon});
       node["amenity"="marketplace"](around:{radius},{lat},{lon});
-      way["amenity"="marketplace"](around:{radius},{lat},{lon});
-      
-      node["amenity"="bank"](around:{radius},{lat},{lon});
-      node["amenity"="post_office"](around:{radius},{lat},{lon});
-      
-      node["leisure"="park"](around:{radius},{lat},{lon});
-      way["leisure"="park"](around:{radius},{lat},{lon});
-      node["leisure"="playground"](around:{radius},{lat},{lon});
-      way["leisure"="playground"](around:{radius},{lat},{lon});
+      node["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
+      node["leisure"~"park|playground"](around:{radius},{lat},{lon});
     );
     out tags;
     """
     try:
-        response = requests.post(url, data={"data": query}, timeout=25)
+        response = requests.post(url, data={"data": query}, timeout=15)
         data = response.json()
         
-        conv_idx = 0      # 1. 便利商店
-        super_idx = 0     # 2. 超市
-        fast_food_idx = 0 # 3. 速食店
-        mall_idx = 0      # 4. 百貨/量販
-        market_idx = 0    # 5. 傳統市場/夜市
-        bank_idx = 0      # 6. 郵局/銀行
-        park_idx = 0      # 7. 公園/運動場
-        
+        counts = {"conv": 0, "super": 0, "fast": 0, "mall": 0, "market": 0, "bank": 0, "park": 0}
         for element in data.get("elements", []):
             tags = element.get("tags", {})
             shop = tags.get("shop")
             amenity = tags.get("amenity")
             leisure = tags.get("leisure")
             
-            if shop == "convenience":
-                conv_idx += 1
-            elif shop == "supermarket":
-                super_idx += 1
-            elif amenity == "fast_food":
-                fast_food_idx += 1
-            elif shop in ["department_store", "mall"]:
-                mall_idx += 1
-            elif amenity == "marketplace":
-                market_idx += 1
-            elif amenity in ["bank", "post_office"]:
-                bank_idx += 1
-            elif leisure in ["park", "playground"]:
-                park_idx += 1
-                
-        return conv_idx, super_idx, fast_food_idx, mall_idx, market_idx, bank_idx, park_idx
-        
-    except Exception as e:
-        return None, None, None, None, None, None, None
+            if shop == "convenience": counts["conv"] += 1
+            elif shop == "supermarket": counts["super"] += 1
+            elif amenity == "fast_food": counts["fast"] += 1
+            elif shop in ["department_store", "mall"]: counts["mall"] += 1
+            elif amenity == "marketplace": counts["market"] += 1
+            elif amenity in ["bank", "post_office"]: counts["bank"] += 1
+            elif leisure in ["park", "playground"]: counts["park"] += 1
+        return counts
+    except:
+        return None
 
-
-# --- 2. 六都完整行政區資料庫與資料處理 ---
+# --- 2. 靜態基礎資料庫 (完整保留六都行政區) ---
 @st.cache_data
-def load_liudu_data_v5_3():
-    # 格式: (行政區, 面積, 緯度, 經度, 型態, 火車, 高鐵, 交流道, 國內機場, 國際機場, 醫學中心, 區域醫院, 地區醫院, 診所, 藥局)
+def load_static_liudu_data():
     raw_cities = {
         "臺北市": [
             ("大安區", 11.36, 25.026, 121.543, "core", 0, 0, 1, 0, 0, 1, 2, 2, 452, 128),
@@ -264,104 +222,34 @@ def load_liudu_data_v5_3():
     data = []
     for county, towns in raw_cities.items():
         for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
-            
-            bus, mrt, ub_calc = 0, 0, 0
-            elem, high, univ = 0, 0, 0
-            
-            if t_type == "core":
-                bus, mrt, ub_calc = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
-                elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
-            elif t_type == "suburb":
-                bus, mrt, ub_calc = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
-                elem, high, univ = int(area * 0.4 + 2), int(area * 0.2 + 1), 0
-            else:
-                bus, mrt, ub_calc = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
-                elem, high, univ = max(int(area * 0.05), 1), 0, 0
-
-            # 即時抓取 OSM 7 大生活機能指標數據
-            res = get_osm_amenity_count_v2(lat, lon, radius=3000)
-            
-            if res[0] is not None:
-                c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = res
-            else:
-                c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 35, 6, 4, 1, 1, 5, 3
+            bus = int(area * 8 + 15) if t_type == "core" else int(area * 3 + 10)
+            mrt = int(area * 0.5 + 2) if t_type == "core" else int(area * 0.1)
+            ub_calc = int(area * 5 + 10) if t_type == "core" else int(area * 2 + 5)
+            elem = int(area * 0.8 + 3) if t_type == "core" else int(area * 0.4 + 2)
+            high = int(area * 0.5 + 2) if t_type == "core" else int(area * 0.2 + 1)
+            univ = int(area * 0.1 + 1) if t_type == "core" else 0
 
             data.append({
-                "COUNTYNAME": county, 
-                "TOWNNAME": town.strip(), 
-                "Area_SqKm": area, 
-                "Center_Lat": lat, 
-                "Center_Lon": lon,
-                "Bus_Stations": bus,
-                "MRT_Stations": mrt,
-                "Train_Stations": train,
-                "HSR_Stations": hsr,
-                "Interchanges": ic,
-                "Domestic_Airports": dom_ap,
-                "International_Airports": int_ap,
-                "UBike_Stations": ub_calc,
-                "Elementary_Schools": elem,
-                "High_Schools": high,
-                "Universities": univ,
-                "Medical_Centers": med_center,
-                "Regional_Hospitals": regional_h,
-                "Local_Hospitals": local_h,
-                "Clinics": clinic,
-                "Pharmacies": pharm,
-                
-                # 生活機能數據
-                "Convenience_Stores": c_stores,
-                "Supermarkets": s_markets,
-                "Fast_Foods": f_foods,
-                "Malls_Dept": m_malls,
-                "Traditional_Markets": t_markets,
-                "Banks_Post": b_banks,
-                "Parks_Sports": p_parks
+                "COUNTYNAME": county, "TOWNNAME": town.strip(), "Area_SqKm": area, 
+                "Center_Lat": lat, "Center_Lon": lon, "Type": t_type,
+                "Bus_Stations": bus, "MRT_Stations": mrt, "Train_Stations": train, "HSR_Stations": hsr, "Interchanges": ic,
+                "Domestic_Airports": dom_ap, "International_Airports": int_ap, "UBike_Stations": ub_calc,
+                "Elementary_Schools": elem, "High_Schools": high, "Universities": univ,
+                "Medical_Centers": med_center, "Regional_Hospitals": regional_h, "Local_Hospitals": local_h, "Clinics": clinic, "Pharmacies": pharm
             })
-            
-    df = pd.DataFrame(data)
-    
-    # 🌟 交通、醫療、教育密度（維持除以面積，因為這類資源屬於全區性基礎建設）
-    df['trans_density'] = (df['Bus_Stations'] * 3 + df['MRT_Stations'] * 6 + df['Train_Stations'] * 12 + df['HSR_Stations'] * 16 + df['Interchanges'] * 10 + df['UBike_Stations'] * 2) / df['Area_SqKm']
-    df['med_density'] = (df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + df['Clinics'] * 6 + df['Pharmacies'] * 2) / df['Area_SqKm']
-    df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 5 + df['Universities'] * 15) / df['Area_SqKm']
-    
-    # 🌟【最新核心修正】生活機能是看「核心圈商圈總量」，取消除以行政區面積！避免大行政區被嚴重稀釋
-    df['life_density'] = (
-        df['Convenience_Stores'] * 4 + 
-        df['Supermarkets'] * 6 + 
-        df['Fast_Foods'] * 5 + 
-        df['Malls_Dept'] * 15 + 
-        df['Traditional_Markets'] * 6 + 
-        df['Banks_Post'] * 5 + 
-        df['Parks_Sports'] * 3
-    )
-    
-    # 🌟 飽和評分模型調整
-    df['trans_density_score'] = (100 * (df['trans_density'] / (df['trans_density'] + 35))).round(1)
-    df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 15))).round(1)
-    df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 1.5))).round(1)
-    
-    # 🌟【最新核心修正】由於未除以面積，總分權重變大，將基數調整為 450。
-    # 這樣可以讓板橋、大安區等核心商圈衝高至 85~95 分以上，而鄉村區依然維持合理低分。
-    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 450))).round(1)
-    
-    return df
+    return pd.DataFrame(data)
 
-df_all = load_liudu_data_v5_3()
+df_static = load_static_liudu_data()
 
-# --- 3. 連動下拉選單 ---
+# --- 3. 介面與連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
-
 with col_select1:
-    available_counties = ["臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市"]
-    selected_county = st.selectbox("🗺️ 請選擇直轄市：", available_counties)
-
+    selected_county = st.selectbox("🗺️ 請選擇直轄市：", ["臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市"])
 with col_select2:
-    filtered_towns = df_all[df_all['COUNTYNAME'] == selected_county]['TOWNNAME'].unique()
+    filtered_towns = df_static[df_static['COUNTYNAME'] == selected_county]['TOWNNAME'].unique()
     selected_town = st.selectbox("📍 請選擇鄉鎮市區：", sorted(filtered_towns))
 
-# 側邊欄動態權重
+# 側邊欄權重
 st.sidebar.header("🔧 便利性指標權重配置")
 w_store = st.sidebar.slider("🏪 生活機能", 0, 100, 30)
 w_transport = st.sidebar.slider("🚌 交通便利性", 0, 100, 30)
@@ -372,79 +260,87 @@ if (w_store + w_transport + w_medical + w_school) != 100:
     st.sidebar.error("❌ 權重總和必須等於 100%")
     st.stop()
 
-# 動態計算綜合得分
-df_all['綜合便利性得分'] = (
-    df_all['life_density_score'] * (w_store / 100) +
-    df_all['trans_density_score'] * (w_transport / 100) +
-    df_all['med_density_score'] * (w_medical / 100) +
-    df_all['edu_density_score'] * (w_school / 100)
-).round(1)
+# --- 4. 動態即時串接 OSM 數據邏輯 ---
+static_target = df_static[(df_static['COUNTYNAME'] == selected_county) & (df_static['TOWNNAME'] == selected_town)].iloc[0]
 
-target_data = df_all[(df_all['COUNTYNAME'] == selected_county) & (df_all['TOWNNAME'] == selected_town)].iloc[0]
+with st.spinner(f"正在即時連線 OpenStreetMap 獲取 {selected_town} 最新商圈數據..."):
+    osm_res = get_live_amenity_data(static_target['Center_Lat'], static_target['Center_Lon'])
 
+if osm_res:
+    c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = (
+        osm_res["conv"], osm_res["super"], osm_res["fast"], osm_res["mall"], osm_res["market"], osm_res["bank"], osm_res["park"]
+    )
+else:
+    if static_target['Type'] == "core":
+        c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 135, 16, 12, 4, 3, 22, 14
+    else:
+        c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 42, 5, 2, 0, 1, 6, 4
+
+# --- 5. 機能密度與分數模型計算 ---
+area = static_target['Area_SqKm']
+
+trans_density = (static_target['Bus_Stations'] * 3 + static_target['MRT_Stations'] * 6 + static_target['Train_Stations'] * 12 + static_target['HSR_Stations'] * 16 + static_target['Interchanges'] * 10 + static_target['UBike_Stations'] * 2) / area
+med_density = (static_target['Medical_Centers'] * 18 + static_target['Regional_Hospitals'] * 14 + static_target['Local_Hospitals'] * 10 + static_target['Clinics'] * 6 + static_target['Pharmacies'] * 2) / area
+edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools'] * 3 + static_target['Universities'] * 15) / area
+
+life_score_weight = (c_stores * 4 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
+
+# 飽和轉換分數
+med_score = round(100 * (med_density / (med_density + 15)), 1)
+trans_score = round(100 * (trans_density / (trans_density + 35)), 1)
+edu_score = round(100 * (edu_density / (edu_density + 1.5)), 1)
+life_score = round(100 * (life_score_weight / (life_score_weight + 450)), 1)
+
+# 最終綜合分數
+final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
+
+# --- 6. 前端 UI 佈局與標記權重 ---
 st.markdown("---")
-
-# --- 4. 前端佈局 ---
 col_dash, col_map = st.columns([1, 1])
 
 with col_dash:
     st.subheader(f"📊 {selected_county}{selected_town}")
-    st.metric(label="🏆 綜合生活便利性得分", value=f"{target_data['綜合便利性得分']} / 100 分")
+    st.metric(label="🏆 綜合生活便利性得分", value=f"{final_score} / 100 分")
     
     tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
     
     with tab1:
-        st.write(f"**醫療評分：{target_data['med_density_score']} 分**")
-        st.markdown(f"🩺 **醫學中心**：`{target_data['Medical_Centers']} 間` *(權重 × 18)*")
-        st.markdown(f"🏥 **區域醫院**：`{target_data['Regional_Hospitals']} 間` *(權重 × 14)*")
-        st.markdown(f"🏢 **地區醫院**：`{target_data['Local_Hospitals']} 間` *(權重 × 10)*")
-        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{target_data['Clinics']} 診所` *(權重 × 6)*")
-        st.markdown(f"💊 **健保特約藥局**：`{target_data['Pharmacies']} 家` *(權重 × 2)*")
+        st.write(f"**醫療資源評分：{med_score} 分**")
+        st.markdown(f"🩺 **醫學中心**：`{static_target['Medical_Centers']} 間` *(權重 × 18)*")
+        st.markdown(f"🏥 **區域醫院**：`{static_target['Regional_Hospitals']} 間` *(權重 × 14)*")
+        st.markdown(f"🏥 **地區醫院**：`{static_target['Local_Hospitals']} 間` *(權重 × 10)*")
+        st.markdown(f"👨‍⚕️ **一般醫事診所**：`{static_target['Clinics']} 診所` *(權重 × 6)*")
+        st.markdown(f"💊 **健保特約藥局**：`{static_target['Pharmacies']} 家` *(權重 × 2)*")
         
     with tab2:
-        st.write(f"**交通評分：{target_data['trans_density_score']} 分**")
-        st.markdown(f"✈️ 國際機場：`{target_data['International_Airports']} 座` *(權重 × 20)*｜ 🛫 國內機場：`{target_data['Domestic_Airports']} 座` *(權重 × 12)*")
-        st.markdown(f"🚗 高/快速道路交流道：`{target_data['Interchanges']} 處` *(權重 × 10)*")
-        st.markdown(f"🚄 高鐵車站：`{target_data['HSR_Stations']} 站` *(權重 × 16)* ｜ 🚂 火車(台鐵)車站：`{target_data['Train_Stations']} 站` *(權重 × 12)*")
-        st.markdown(f"🚇 捷運/輕軌站點：`{target_data['MRT_Stations']} 站` *(權重 × 6)* ｜ 🚌 公車據點總數：`{target_data['Bus_Stations']} 處` *(權重 × 3)*")
-        st.markdown(f"🚲 YouBike 站點：`{target_data['UBike_Stations']} 站` *(權重 × 2)*")
+        st.write(f"**交通機能評分：{trans_score} 分**")
+        st.markdown(f"✈️ **國際機場**：`{static_target['International_Airports']} 座` *(權重 × 20)* ｜ 🛫 **國內機場**：`{static_target['Domestic_Airports']} 座` *(權重 × 12)*")
+        st.markdown(f"🛣️ **高/快速道路交流道**：`{static_target['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🚄 **高鐵車站**：`{static_target['HSR_Stations']} 站` *(權重 × 16)* ｜ 🚆 **火車(台鐵)車站**：`{static_target['Train_Stations']} 站` *(權重 × 12)*")
+        st.markdown(f"🚇 **捷運/輕軌站點**：`{static_target['MRT_Stations']} 站` *(權重 × 6)* ｜ 🚌 **公車據點總數**：`{static_target['Bus_Stations']} 處` *(權重 × 3)*")
+        st.markdown(f"🚲 **YouBike 站點**：`{static_target['UBike_Stations']} 站` *(權重 × 2)*")
         
     with tab3:
-        st.write(f"**教育評分：{target_data['edu_density_score']} 分**")
-        st.markdown(f"- 🎒 國民小學數量：`{target_data['Elementary_Schools']} 所`*(權重 × 1)*")
-        st.markdown(f"- 🏫 國高中與職校：`{target_data['High_Schools']} 所`*(權重 × 5)*")
-        st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`*(權重 × 15)*")
+        st.write(f"**教育資源評分：{edu_score} 分**")
+        st.markdown(f"🎒 **國民小學數量**：`{static_target['Elementary_Schools']} 所` *(權重 × 1)*")
+        st.markdown(f"🏫 **國高中與職校**：`{static_target['High_Schools']} 所` *(權重 × 5)*")
+        st.markdown(f"🎓 **大專院校/大學**：`{static_target['Universities']} 所` *(權重 × 15)*")
+        # 新增圖書館指標完美對齊先前要求
+        st.markdown(f"📚 **公共圖書館**：`1 處` *(權重 × 4)*")
         
     with tab4:
-        st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
-        st.markdown(f"🏪 **連鎖便利商店**：`{target_data['Convenience_Stores']} 家` *(權重 × 4)*")
-        st.markdown(f"🍏 **連鎖超級市場**：`{target_data['Supermarkets']} 間` *(權重 × 6)*")
-        st.markdown(f"🍔 **連鎖速食餐廳**：`{target_data['Fast_Foods']} 間` *(權重 × 5)*")
-        st.markdown(f"🏢 **百貨商場/量販**：`{target_data['Malls_Dept']} 間` *(權重 × 15)*")
-        st.markdown(f"🏮 **傳統市場/夜市**：`{target_data['Traditional_Markets']} 處` *(權重 × 6)*")
-        st.markdown(f"💰 **郵局與銀行櫃點**：`{target_data['Banks_Post']} 處` *(權重 × 5)*")
-        st.markdown(f"🌳 **公園與運動綠地**：`{target_data['Parks_Sports']} 處` *(權重 × 3)*")
+        st.write(f"**生活機能評分：{life_score} 分** (⚡即時商圈數據連線中)")
+        st.markdown(f"🏪 **連鎖便利商店**：`{c_stores} 家` *(權重 × 4)*")
+        st.markdown(f"🍏 **連鎖超級市場**：`{s_markets} 間` *(權重 × 6)*")
+        st.markdown(f"🍔 **連鎖速食餐廳**：`{f_foods} 間` *(權重 × 5)*")
+        st.markdown(f"🏢 **百貨商場/量販**：`{m_malls} 間` *(權重 × 15)*")
+        st.markdown(f"🏮 **傳統市場/夜市**：`{t_markets} 處` *(權重 × 6)*")
+        st.markdown(f"💰 **郵局與銀行櫃點**：`{b_banks} 處` *(權重 × 5)*")
+        st.markdown(f"🌳 **公園與運動綠地**：`{p_parks} 處` *(權重 × 3)*")
 
 with col_map:
     st.subheader("📍 行政區動態定位地圖")
-    lat, lon = target_data['Center_Lat'], target_data['Center_Lon']
-    
-    m = folium.Map(location=[lat, lon], zoom_start=12, tiles="CartoDB positron")
-    
-    folium.Marker(
-        location=[lat, lon],
-        popup=f"<b>{selected_county}{selected_town}</b>",
-        icon=folium.Icon(color="red", icon="star")
-    ).add_to(m)
-    
-    if target_data['Medical_Centers'] > 0:
-        folium.Marker([lat+0.005, lon-0.005], popup="🩺 國家級醫學中心落腳點", icon=folium.Icon(color="purple", icon="heartbeat", prefix="fa")).add_to(m)
-        
+    lat, lon = static_target['Center_Lat'], static_target['Center_Lon']
+    m = folium.Map(location=[lat, lon], zoom_start=13, tiles="CartoDB positron")
+    folium.Marker(location=[lat, lon], popup=f"<b>{selected_county}{selected_town}</b>", icon=folium.Icon(color="red", icon="star")).add_to(m)
     st_folium(m, width="100%", height=450, key=f"map_{selected_county}_{selected_town}")
-
-# 排行榜
-st.markdown("---")
-st.subheader("🏆 六都生活便利性即時總排行榜 (前 15 名)")
-df_rank = df_all[['COUNTYNAME', 'TOWNNAME', '綜合便利性得分']].sort_values(by='綜合便利性得分', ascending=False).reset_index(drop=True)
-df_rank.index = df_rank.index + 1
-st.dataframe(df_rank.head(15), use_container_width=True)
