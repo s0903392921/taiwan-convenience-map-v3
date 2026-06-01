@@ -9,48 +9,81 @@ st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.2", la
 
 st.title("🏙️ 台灣六都生活便利性精細評分系統 ")
 
-# --- 1. 建立一個專門去 OpenStreetMap 抓取店家數量的函式 ---
-def get_osm_amenity_count(lat, lon, radius=3000):
+# --- 1. 建立一個專門去 OpenStreetMap 抓取 7 大生活機能店家數量的函式 ---
+def get_osm_amenity_count_v2(lat, lon, radius=3000):
     """
-    輸入中心經緯度與搜尋半徑(公尺)，回傳該區域內超商、超市、百貨的真實數量
+    輸入中心經緯度與搜尋半徑(公尺)，利用一條 Overpass 查詢即時回傳：
+    便利商店、超市、速食店、百貨/量販、傳統市場/夜市、銀行/郵局、公園/運動場 的真實數量
     """
     url = "https://overpass-api.de/api/interpreter"
     
     query = f"""
-    [out:json][timeout:15];
+    [out:json][timeout:25];
     (
       node["shop"="convenience"](around:{radius},{lat},{lon});
       way["shop"="convenience"](around:{radius},{lat},{lon});
+      
       node["shop"="supermarket"](around:{radius},{lat},{lon});
       way["shop"="supermarket"](around:{radius},{lat},{lon});
+      
+      node["amenity"="fast_food"](around:{radius},{lat},{lon});
+      way["amenity"="fast_food"](around:{radius},{lat},{lon});
+      
       node["shop"="department_store"](around:{radius},{lat},{lon});
       way["shop"="department_store"](around:{radius},{lat},{lon});
+      node["shop"="mall"](around:{radius},{lat},{lon});
+      way["shop"="mall"](around:{radius},{lat},{lon});
+      
+      node["amenity"="marketplace"](around:{radius},{lat},{lon});
+      way["amenity"="marketplace"](around:{radius},{lat},{lon});
+      
+      node["amenity"="bank"](around:{radius},{lat},{lon});
+      node["amenity"="post_office"](around:{radius},{lat},{lon});
+      
+      node["leisure"="park"](around:{radius},{lat},{lon});
+      way["leisure"="park"](around:{radius},{lat},{lon});
+      node["leisure"="playground"](around:{radius},{lat},{lon});
+      way["leisure"="playground"](around:{radius},{lat},{lon});
     );
     out tags;
     """
     try:
-        response = requests.post(url, data={"data": query}, timeout=15)
+        response = requests.post(url, data={"data": query}, timeout=25)
         data = response.json()
         
-        store_count = 0
-        super_m_count = 0
-        dept_count = 0
+        conv_idx = 0      # 1. 便利商店
+        super_idx = 0     # 2. 超市
+        fast_food_idx = 0 # 3. 速食店
+        mall_idx = 0      # 4. 百貨/量販
+        market_idx = 0    # 5. 傳統市場/夜市
+        bank_idx = 0      # 6. 郵局/銀行
+        park_idx = 0      # 7. 公園/運動場
         
         for element in data.get("elements", []):
             tags = element.get("tags", {})
-            shop_type = tags.get("shop")
+            shop = tags.get("shop")
+            amenity = tags.get("amenity")
+            leisure = tags.get("leisure")
             
-            if shop_type == "convenience":
-                store_count += 1
-            elif shop_type == "supermarket":
-                super_m_count += 1
-            elif shop_type == "department_store":
-                dept_count += 1
+            if shop == "convenience":
+                conv_idx += 1
+            elif shop == "supermarket":
+                super_idx += 1
+            elif amenity == "fast_food":
+                fast_food_idx += 1
+            elif shop in ["department_store", "mall"]:
+                mall_idx += 1
+            elif amenity == "marketplace":
+                market_idx += 1
+            elif amenity in ["bank", "post_office"]:
+                bank_idx += 1
+            elif leisure in ["park", "playground"]:
+                park_idx += 1
                 
-        return store_count, super_m_count, dept_count
+        return conv_idx, super_idx, fast_food_idx, mall_idx, market_idx, bank_idx, park_idx
         
     except Exception as e:
-        return None, None, None
+        return None, None, None, None, None, None, None
 
 
 # --- 2. 六都完整行政區資料庫與資料處理 ---
@@ -70,7 +103,7 @@ def load_liudu_data_v5_2():
             ("南港區", 21.84, 25.055, 121.606, "suburb", 1, 1, 3, 0, 0, 0, 1, 1, 95, 41),
             ("文山區", 31.50, 24.998, 121.570, "suburb", 0, 0, 2, 0, 0, 0, 1, 2, 155, 68),
             ("士林區", 62.37, 25.093, 121.526, "suburb", 0, 0, 1, 0, 0, 1, 1, 1, 245, 92),
-            ("北投區", 56.82, 25.132, 121.500, "suburb", 0, 0, 0, 0, 0, 2, 1, 2, 145, 59)
+            ("北投區", 56.82, 25.132, 121.500, "suburb", 2, 0, 0, 0, 0, 2, 1, 2, 145, 59)
         ],
         "新北市": [
             ("板橋區", 23.14, 25.011, 121.465, "core", 2, 1, 3, 0, 0, 1, 1, 4, 560, 185),
@@ -221,8 +254,8 @@ def load_liudu_data_v5_2():
             ("甲仙區", 124.03, 23.085, 120.591, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 8, 3),
             ("六龜區", 194.15, 23.003, 120.632, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 11, 5),
             ("茂林區", 194.00, 22.885, 120.662, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 2, 1),
-            ("桃源區", 928.98, 23.159, 120.781, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 3, 1),
-            ("那瑪夏區", 252.98, 23.262, 120.692, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 3, 1),
+            ("桃源區", 92.98, 23.159, 120.781, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 3, 1),
+            ("那瑪夏區", 25.98, 23.262, 120.692, "rural", 0, 0, 0, 0, 0, 0, 0, 0, 3, 1),
             ("林園區", 32.29, 22.508, 120.396, "rural", 0, 0, 0, 0, 0, 0, 0, 2, 65, 24),
             ("大寮區", 71.04, 22.605, 120.395, "suburb", 1, 0, 2, 0, 0, 0, 0, 2, 105, 38)
         ]
@@ -236,28 +269,25 @@ def load_liudu_data_v5_2():
             bus, mrt, ub_calc = 0, 0, 0
             elem, high, univ = 0, 0, 0
             
-            # --- 原本的公式計算（保留作為網路斷線時的保底數據） ---
             if t_type == "core":
                 bus, mrt, ub_calc = int(area * 8 + 15), int(area * 0.5 + 2), int(area * 5 + 10)
                 elem, high, univ = int(area * 0.8 + 3), int(area * 0.5 + 2), int(area * 0.1 + 1)
-                store, super_m, dept, cafe = int(area * 6 + 25), int(area * 1.2 + 5), int(area * 0.1 + 1), int(area * 4 + 10)
             elif t_type == "suburb":
                 bus, mrt, ub_calc = int(area * 3 + 10), int(area * 0.1), int(area * 2 + 5)
                 elem, high, univ = int(area * 0.4 + 2), int(area * 0.2 + 1), 0
-                store, super_m, dept, cafe = int(area * 2.5 + 10), int(area * 0.4 + 2), 0, int(area * 1 + 2)
             else:
                 bus, mrt, ub_calc = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
-                store, super_m, dept, cafe = max(int(area * 0.15), 2), max(int(area * 0.02), 1), 0, max(int(area * 0.05), 1)
 
-            # --- 【關鍵新增】即時抓取 OSM 真實生活機能數據 ---
-            real_store, real_super_m, real_dept = get_osm_amenity_count(lat, lon, radius=3000)
+            # --- 🌟【最新核心修正】即時抓取 OSM 擴充版 7 大生活機能指標數據 ---
+            res = get_osm_amenity_count_v2(lat, lon, radius=3000)
             
-            if real_store is not None:
-                store = real_store
-                super_m = real_super_m
-                dept = real_dept
-            
+            if res[0] is not None:
+                c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = res
+            else:
+                # 網路斷線、超時或 API 異常時的保底粗估數據
+                c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 35, 6, 4, 1, 1, 5, 3
+
             # 儲存到 data 陣列中
             data.append({
                 "COUNTYNAME": county, 
@@ -276,15 +306,20 @@ def load_liudu_data_v5_2():
                 "Elementary_Schools": elem,
                 "High_Schools": high,
                 "Universities": univ,
-                "Convenience_Stores": store,       
-                "Supermarkets": super_m,          
-                "Department_Stores": dept,         
-                "Coffee_Shops": cafe,
                 "Medical_Centers": med_center,
                 "Regional_Hospitals": regional_h,
                 "Local_Hospitals": local_h,
                 "Clinics": clinic,
-                "Pharmacies": pharm
+                "Pharmacies": pharm,
+                
+                # 新增 7 大生活機能指標
+                "Convenience_Stores": c_stores,
+                "Supermarkets": s_markets,
+                "Fast_Foods": f_foods,
+                "Malls_Dept": m_malls,
+                "Traditional_Markets": t_markets,
+                "Banks_Post": b_banks,
+                "Parks_Sports": p_parks
             })
             
     df = pd.DataFrame(data)
@@ -296,20 +331,31 @@ def load_liudu_data_v5_2():
         df['International_Airports'] * 20 + df['UBike_Stations'] * 2
     ) / df['Area_SqKm']
     
-    # 🌟 醫療密度指標 (完美分級權重)
+    # 🌟 醫療密度指標
     df['med_density'] = (
         df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + 
         df['Clinics'] * 6 + df['Pharmacies'] * 2
     ) / df['Area_SqKm']
     
+    # 🌟 教育密度指標
     df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 3 + df['Universities'] * 15) / df['Area_SqKm']
-    df['life_density'] = (df['Convenience_Stores'] + df['Supermarkets'] * 8 + df['Department_Stores'] * 40 + df['Coffee_Shops'] * 2) / df['Area_SqKm']
     
-    # 飽和評分模型 (與生活體感精準對齊)
+    # 🌟【最新權重公式修正】(1)*4 + (2)*6 + (3)*5 + (4)*15 + (5)*6 + (6)*5 + (7)*3
+    df['life_density'] = (
+        df['Convenience_Stores'] * 4 + 
+        df['Supermarkets'] * 6 + 
+        df['Fast_Foods'] * 5 + 
+        df['Malls_Dept'] * 15 + 
+        df['Traditional_Markets'] * 6 + 
+        df['Banks_Post'] * 5 + 
+        df['Parks_Sports'] * 3
+    ) / df['Area_SqKm']
+    
+    # 飽和評分模型 (配合新增指標提高基數，維持體感舒適度)
     df['trans_density_score'] = (100 * (df['trans_density'] / (df['trans_density'] + 35))).round(1)
     df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 15))).round(1)
     df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 1.5))).round(1)
-    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 15))).round(1)
+    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 45))).round(1)
     
     return df
 
@@ -380,11 +426,15 @@ with col_dash:
         st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`")
         
     with tab4:
+        # 🌟【最新前端修正】與你的 7 大生活機能指標欄位完美對齊
         st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
-        st.markdown(f"- 🏪 連鎖便利商店：`{target_data['Convenience_Stores']} 家`")
-        st.markdown(f"- 🍏 連鎖超市：`{target_data['Supermarkets']} 間`")
-        st.markdown(f"- 🏢 百貨商場/量販：`{target_data['Department_Stores']} 間`")
-        st.markdown(f"- ☕ 咖啡廳與美學空間：`{target_data['Coffee_Shops']} 間`")
+        st.markdown(f"🏪 **連鎖便利商店**：`{target_data['Convenience_Stores']} 家` *(權重 × 4)*")
+        st.markdown(f"🍏 **連鎖超級市場**：`{target_data['Supermarkets']} 間` *(權重 × 6)*")
+        st.markdown(f"🍔 **連鎖速食餐廳**：`{target_data['Fast_Foods']} 間` *(權重 × 5)*")
+        st.markdown(f"🏢 **百貨商場/量販**：`{target_data['Malls_Dept']} 間` *(權重 × 15)*")
+        st.markdown(f"🏮 **傳統市場/夜市**：`{target_data['Traditional_Markets']} 處` *(權重 × 6)*")
+        st.markdown(f"💰 **郵局與銀行櫃點**：`{target_data['Banks_Post']} 處` *(權重 × 5)*")
+        st.markdown(f"🌳 **公園與運動綠地**：`{target_data['Parks_Sports']} 處` *(權重 × 3)*")
 
 with col_map:
     st.subheader("📍 行政區動態定位地圖")
