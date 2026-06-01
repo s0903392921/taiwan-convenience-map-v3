@@ -394,3 +394,4 @@ with col_chart:
 
 with col_table:
     st.dataframe(df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], use_container_width=True, hide_index=True)
+total_score = max(0.0, min(100.0, round(total_score, 1)))
