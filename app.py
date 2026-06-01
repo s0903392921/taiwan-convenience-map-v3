@@ -287,13 +287,13 @@ edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools
 life_score_weight = (c_stores * 4 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
 
 # 飽和轉換模型分數
-med_score = round(100 * (med_density / (med_density + 15)), 1)
-trans_score = round(100 * (trans_density / (trans_density + 12)), 1)
-edu_score = round(100 * (edu_density / (edu_density + 2.5)), 1)
-life_score = round(100 * (life_score_weight / (life_score_weight + 150)), 1)
+med_score = round(100 * (med_density / (med_density + 10)), 1)
+trans_score = round(100 * (trans_density / (trans_density + 8)), 1)
+edu_score = round(100 * (edu_density / (edu_density + 2)), 1)
+life_score = round(100 * (life_score_weight / (life_score_weight + 100)), 1)
 
 final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
-
+r_final = max(0.0, min(100.0, round(r_final, 1)))
 # --- 6. 前端 UI 佈局 ---
 st.markdown("---")
 col_dash, col_map = st.columns([1, 1])
