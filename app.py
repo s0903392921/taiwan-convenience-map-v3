@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 import numpy as np
 
-st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.2", layout="wide")
+st.set_page_config(page_title="台灣六都生活便利性評分系統 V5.3", layout="wide")
 
 st.title("🏙️ 台灣六都生活便利性精細評分系統 ")
 
@@ -88,7 +88,7 @@ def get_osm_amenity_count_v2(lat, lon, radius=3000):
 
 # --- 2. 六都完整行政區資料庫與資料處理 ---
 @st.cache_data
-def load_liudu_data_v5_2():
+def load_liudu_data_v5_3():
     # 格式: (行政區, 面積, 緯度, 經度, 型態, 火車, 高鐵, 交流道, 國內機場, 國際機場, 醫學中心, 區域醫院, 地區醫院, 診所, 藥局)
     raw_cities = {
         "臺北市": [
@@ -265,7 +265,6 @@ def load_liudu_data_v5_2():
     for county, towns in raw_cities.items():
         for town, area, lat, lon, t_type, train, hsr, ic, dom_ap, int_ap, med_center, regional_h, local_h, clinic, pharm in towns:
             
-            # 預設公車與捷運數據，模擬原有公式所需的交通欄位
             bus, mrt, ub_calc = 0, 0, 0
             elem, high, univ = 0, 0, 0
             
@@ -279,16 +278,14 @@ def load_liudu_data_v5_2():
                 bus, mrt, ub_calc = max(int(area * 0.5), 5), 0, max(int(area * 0.1), 1)
                 elem, high, univ = max(int(area * 0.05), 1), 0, 0
 
-            # --- 🌟【最新核心修正】即時抓取 OSM 擴充版 7 大生活機能指標數據 ---
+            # 即時抓取 OSM 7 大生活機能指標數據
             res = get_osm_amenity_count_v2(lat, lon, radius=3000)
             
             if res[0] is not None:
                 c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = res
             else:
-                # 網路斷線、超時或 API 異常時的保底粗估數據
                 c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 35, 6, 4, 1, 1, 5, 3
 
-            # 儲存到 data 陣列中
             data.append({
                 "COUNTYNAME": county, 
                 "TOWNNAME": town.strip(), 
@@ -312,7 +309,7 @@ def load_liudu_data_v5_2():
                 "Clinics": clinic,
                 "Pharmacies": pharm,
                 
-                # 新增 7 大生活機能指標
+                # 生活機能數據
                 "Convenience_Stores": c_stores,
                 "Supermarkets": s_markets,
                 "Fast_Foods": f_foods,
@@ -324,23 +321,12 @@ def load_liudu_data_v5_2():
             
     df = pd.DataFrame(data)
     
-    # 🌟 交通密度指標
-    df['trans_density'] = (
-        df['Bus_Stations'] * 3 + df['MRT_Stations'] * 6 + df['Train_Stations'] * 12 + 
-        df['HSR_Stations'] * 16 + df['Interchanges'] * 10 + df['Domestic_Airports'] * 12 + 
-        df['International_Airports'] * 20 + df['UBike_Stations'] * 2
-    ) / df['Area_SqKm']
-    
-    # 🌟 醫療密度指標
-    df['med_density'] = (
-        df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + 
-        df['Clinics'] * 6 + df['Pharmacies'] * 2
-    ) / df['Area_SqKm']
-    
-    # 🌟 教育密度指標
+    # 🌟 交通、醫療、教育密度（維持除以面積，因為這類資源屬於全區性基礎建設）
+    df['trans_density'] = (df['Bus_Stations'] * 3 + df['MRT_Stations'] * 6 + df['Train_Stations'] * 12 + df['HSR_Stations'] * 16 + df['Interchanges'] * 10 + df['UBike_Stations'] * 2) / df['Area_SqKm']
+    df['med_density'] = (df['Medical_Centers'] * 18 + df['Regional_Hospitals'] * 14 + df['Local_Hospitals'] * 10 + df['Clinics'] * 6 + df['Pharmacies'] * 2) / df['Area_SqKm']
     df['edu_density'] = (df['Elementary_Schools'] + df['High_Schools'] * 5 + df['Universities'] * 15) / df['Area_SqKm']
     
-    # 🌟【最新權重公式修正】(1)*4 + (2)*6 + (3)*5 + (4)*15 + (5)*6 + (6)*5 + (7)*3
+    # 🌟【最新核心修正】生活機能是看「核心圈商圈總量」，取消除以行政區面積！避免大行政區被嚴重稀釋
     df['life_density'] = (
         df['Convenience_Stores'] * 4 + 
         df['Supermarkets'] * 6 + 
@@ -349,17 +335,20 @@ def load_liudu_data_v5_2():
         df['Traditional_Markets'] * 6 + 
         df['Banks_Post'] * 5 + 
         df['Parks_Sports'] * 3
-    ) / df['Area_SqKm']
+    )
     
-    # 飽和評分模型 (配合新增指標提高基數，維持體感舒適度)
+    # 🌟 飽和評分模型調整
     df['trans_density_score'] = (100 * (df['trans_density'] / (df['trans_density'] + 35))).round(1)
     df['med_density_score'] = (100 * (df['med_density'] / (df['med_density'] + 15))).round(1)
     df['edu_density_score'] = (100 * (df['edu_density'] / (df['edu_density'] + 1.5))).round(1)
-    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 45))).round(1)
+    
+    # 🌟【最新核心修正】由於未除以面積，總分權重變大，將基數調整為 450。
+    # 這樣可以讓板橋、大安區等核心商圈衝高至 85~95 分以上，而鄉村區依然維持合理低分。
+    df['life_density_score'] = (100 * (df['life_density'] / (df['life_density'] + 450))).round(1)
     
     return df
 
-df_all = load_liudu_data_v5_2()
+df_all = load_liudu_data_v5_3()
 
 # --- 3. 連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
@@ -383,6 +372,7 @@ if (w_store + w_transport + w_medical + w_school) != 100:
     st.sidebar.error("❌ 權重總和必須等於 100%")
     st.stop()
 
+# 動態計算綜合得分
 df_all['綜合便利性得分'] = (
     df_all['life_density_score'] * (w_store / 100) +
     df_all['trans_density_score'] * (w_transport / 100) +
@@ -398,7 +388,7 @@ st.markdown("---")
 col_dash, col_map = st.columns([1, 1])
 
 with col_dash:
-    st.subheader(f"📊 {selected_county}{selected_town} ")
+    st.subheader(f"📊 {selected_county}{selected_town}")
     st.metric(label="🏆 綜合生活便利性得分", value=f"{target_data['綜合便利性得分']} / 100 分")
     
     tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
@@ -426,7 +416,6 @@ with col_dash:
         st.markdown(f"- 🎓 大專院校/大學：`{target_data['Universities']} 所`*(權重 × 15)*")
         
     with tab4:
-        # 🌟【最新前端修正】與你的 7 大生活機能指標欄位完美對齊
         st.write(f"**生活機能評分：{target_data['life_density_score']} 分**")
         st.markdown(f"🏪 **連鎖便利商店**：`{target_data['Convenience_Stores']} 家` *(權重 × 4)*")
         st.markdown(f"🍏 **連鎖超級市場**：`{target_data['Supermarkets']} 間` *(權重 × 6)*")
