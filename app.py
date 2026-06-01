@@ -293,7 +293,7 @@ edu_score = round(100 * (edu_density / (edu_density + 2)), 1)
 life_score = round(100 * (life_score_weight / (life_score_weight + 100)), 1)
 
 final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
-r_final = max(0.0, min(100.0, round(r_final, 1)))
+
 # --- 6. 前端 UI 佈局 ---
 st.markdown("---")
 col_dash, col_map = st.columns([1, 1])
