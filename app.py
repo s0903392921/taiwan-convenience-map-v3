@@ -279,14 +279,14 @@ med_density = (static_target['Medical_Centers'] * 18 + static_target['Regional_H
 edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools'] * 3 + static_target['Universities'] * 15 + static_target['Libraries'] * 8) / area
 
 # 🚀 關鍵修正：將生活機能轉化為「密度」，避免大面積小數量的地區與核心區分數全部卡死
-life_score_weight = (c_stores * 4 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
+life_score_weight = (c_stores * 3 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
 life_density = life_score_weight / area
 
 # 飽和轉換模型分數 (調整分母常數，確保分數過渡自然、高低拉開)
 med_score = round(100 * (med_density / (med_density + 13)), 1)
 trans_score = round(100 * (trans_density / (trans_density + 10)), 1)
 edu_score = round(100 * (edu_density / (edu_density + 1.5)), 1)
-life_score = round(100 * (life_density / (life_density + 8.0)), 1)
+life_score = round(100 * (life_density / (life_density + 9.0)), 1)
 
 final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
 
@@ -328,8 +328,8 @@ with col_dash:
         
     with tab4:
         st.write(f"**生活機能評分：{life_score} 分**")
-        st.markdown(f"🏪 **連鎖便利商店**：`{c_stores} 家` *(權重 × 4)*")
-        st.markdown(f"🍏 **連鎖超級市場**：`{s_markets} 間` *(權重 × 6)*")
+        st.markdown(f"🏪 **連鎖便利商店**：`{c_stores} 家` *(權重 × 3)*")
+        st.markdown(f"🍏 **連鎖超市**：`{s_markets} 間` *(權重 × 6)*")
         st.markdown(f"🍔 **連鎖速食餐廳**：`{f_foods} 間` *(權重 × 5)*")
         st.markdown(f"🏢 **百貨商場/量販**：`{m_malls} 間` *(權重 × 15)*")
         st.markdown(f"🏮 **傳統市場/夜市**：`{t_markets} 處` *(權重 × 6)*")
