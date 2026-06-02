@@ -279,7 +279,6 @@ area = static_target['Area_SqKm'] if static_target['Area_SqKm'] > 0 else 1.0
 trans_density = (static_target['Bus_Stations'] * 2 + static_target['MRT_Stations'] * 6 + static_target['Train_Stations'] * 12 + static_target['HSR_Stations'] * 16 + static_target['Interchanges'] * 10 + static_target['Domestic_Airports'] * 12 + static_target['International_Airports'] * 18 + static_target['UBike_Stations'] * 1) / area
 med_density = (static_target['Medical_Centers'] * 18 + static_target['Regional_Hospitals'] * 14 + static_target['Local_Hospitals'] * 10 + static_target['Clinics'] * 6 + static_target['Pharmacies'] * 2) / area
 edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools'] * 3 + static_target['Universities'] * 15 + static_target['Libraries'] * 8) / area
-
 life_score_weight = (c_stores * 3 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
 life_density = life_score_weight / area
 
