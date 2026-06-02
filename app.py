@@ -343,54 +343,115 @@ with col_map:
     folium.Marker(location=[lat, lon], popup=f"<b>{selected_county}{selected_town}</b>", icon=folium.Icon(color="red", icon="star")).add_to(m)
     st_folium(m, width="100%", height=450, key=f"map_{selected_county}_{selected_town}")
 
-# --- 7. 六都排行榜 ---
+# --- 7. 雙區機能動態對比模組  ---
 st.markdown("---")
-st.header("🏆 六都生活便利性即時總排行榜 (前 15 名)")
+st.header("⚖️ 雙行政區機能動態對比 PK 模組")
+st.caption("此模組將同時發動即時 API 請求，在相同的數據基準下，橫向評比兩個行政區的四大機能指標。")
 
-with st.spinner("正在動態計算全台行政區當前權重排名..."):
-    leaderboard_list = []
+# 建立兩個下拉選單，讓使用者選擇要對比的 B 區域 (A 區域預設就是上面選定的區域)
+col_pk1, col_pk2 = st.columns([1, 1])
+
+with col_pk1:
+    st.subheader("🏁 基準區域 (A)")
+    st.info(f"已自動帶入上方選定：**{selected_county} {selected_town}**")
+    # 複製 A 區的分數 (直接拿剛才前面第 5 步算好的分數)
+    area_A_scores = [med_score, trans_score, edu_score, life_score]
+
+with col_pk2:
+    st.subheader("🔍 對比區域 (B)")
+    # 讓使用者在下方選取第二個行政區
+    pk_county = st.selectbox("請選擇對比縣市", df_static['COUNTYNAME'].unique(), key="pk_county")
+    pk_town_options = df_static[df_static['COUNTYNAME'] == pk_county]['TOWNNAME'].unique()
+    pk_town = st.selectbox("請選擇對比行政區", pk_town_options, key="pk_town")
+
+# 開始動態計算 B 區的真實即時分數
+with st.spinner(f"正在連線 OpenStreetMap 獲取 {pk_town} 最新數據並進行動態權重運算..."):
+    # 1. 提取 B 區的靜態地理骨架
+    pk_target = df_static[(df_static['COUNTYNAME'] == pk_county) & (df_static['TOWNNAME'] == pk_town)].iloc[0]
+    pk_area = pk_target['Area_SqKm'] if pk_target['Area_SqKm'] > 0 else 1.0
     
-    for idx, row in df_static.iterrows():
-        r_area = row['Area_SqKm'] if row['Area_SqKm'] > 0 else 1.0
-        
-        # 1. 排行榜各項密度計算 (與上方完全同步)
-        r_trans_density = (row['Bus_Stations'] * 2 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['Domestic_Airports'] * 12 + row['International_Airports'] * 18 + row['UBike_Stations'] * 1) / r_area
-        r_med_density = (row['Medical_Centers'] * 18 + row['Regional_Hospitals'] * 14 + row['Local_Hospitals'] * 10 + row['Clinics'] * 6 + row['Pharmacies'] * 2) / r_area
-        r_edu_density = (row['Elementary_Schools'] + row['High_Schools'] * 3 + row['Universities'] * 15 + row['Libraries'] * 8) / r_area
-        
-        # 2. 生活機能分支判斷 (若是選中區拿即時權重，否則依照核心/非核心拿預設權重)
-        if row['COUNTYNAME'] == selected_county and row['TOWNNAME'] == selected_town:
-            r_life_weight = life_score_weight
+    # 2. B 區交通、醫療、教育密度計算 (與前面完全同步)
+    pk_trans_density = (pk_target['Bus_Stations'] * 2 + pk_target['MRT_Stations'] * 6 + pk_target['Train_Stations'] * 12 + pk_target['HSR_Stations'] * 16 + pk_target['Interchanges'] * 10 + pk_target['Domestic_Airports'] * 12 + pk_target['International_Airports'] * 18 + pk_target['UBike_Stations'] * 1) / pk_area
+    pk_med_density = (pk_target['Medical_Centers'] * 18 + pk_target['Regional_Hospitals'] * 14 + pk_target['Local_Hospitals'] * 10 + pk_target['Clinics'] * 6 + pk_target['Pharmacies'] * 2) / pk_area
+    pk_edu_density = (pk_target['Elementary_Schools'] + pk_target['High_Schools'] * 3 + pk_target['Universities'] * 15 + pk_target['Libraries'] * 8) / pk_area
+    
+    # 3. B 區即時生活機能抓取 (發動第二次 API 請求，確保數據新鮮度與 A 區一致)
+    pk_osm = get_live_amenity_data(pk_target['Center_Lat'], pk_target['Center_Lon'])
+    if pk_osm:
+        pk_life_weight = (pk_osm["conv"] * 3 + pk_osm["super"] * 6 + pk_osm["fast"] * 5 + pk_osm["mall"] * 15 + pk_osm["market"] * 6 + pk_osm["bank"] * 5 + pk_osm["park"] * 3)
+    else:
+        # 容災機制
+        if pk_target['Type'] == "core":
+            pk_life_weight = (135 * 3 + 16 * 6 + 12 * 5 + 4 * 15 + 3 * 6 + 22 * 5 + 14 * 3)
         else:
-            if row['Type'] == "core":
-                r_life_weight = (135 * 4 + 16 * 6 + 12 * 5 + 4 * 15 + 3 * 6 + 22 * 5 + 14 * 3)
-            else:
-                r_life_weight = (42 * 4 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
-        
-      
-        r_life_density = r_life_weight / r_area
-        
-        # 3. 飽和轉換公式同步
-        r_med_score = 100 * (r_med_density / (r_med_density + 13))
-        r_trans_score = 100 * (r_trans_density / (r_trans_density + 10))
-        r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.5))
-        r_life_score = 100 * (r_life_density / (r_life_density + 9.0))
-        
-        # 計算最終加權總分
-        r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
-        r_final = max(0.0, min(100.0, round(r_final, 1)))
-        
-        leaderboard_list.append({
-            "縣市": row['COUNTYNAME'], "行政區": row['TOWNNAME'], "綜合便利性得分": r_final, "分類": row['Type'].upper()
-        })
-        
-    df_leaderboard = pd.DataFrame(leaderboard_list)
-    df_top15 = df_leaderboard.sort_values(by="綜合便利性得分", ascending=False).head(15).reset_index(drop=True)
-    df_top15['排名'] = df_top15.index + 1
+            pk_life_weight = (42 * 3 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
+            
+    pk_life_density = pk_life_weight / pk_area
+    
+    # 4. B 區飽和模型轉換
+    pk_med_score = round(100 * (pk_med_density / (pk_med_density + 13)), 1)
+    pk_trans_score = round(100 * (pk_trans_density / (pk_trans_density + 10)), 1)
+    pk_edu_score = round(100 * (pk_edu_density / (pk_edu_density + 1.5)), 1)
+    pk_life_score = round(100 * (pk_life_density / (pk_life_density + 9.0)), 1)
+    
+    # B 區最終加權總分 (同樣連動前端的使用者滑桿權重)
+    pk_final_score = round(pk_life_score * (w_store/100) + pk_trans_score * (w_transport/100) + pk_med_score * (w_medical/100) + pk_edu_score * (w_school/100), 1)
+    area_B_scores = [pk_med_score, pk_trans_score, pk_edu_score, pk_life_score]
 
-# 滿版單欄顯示表格
-st.dataframe(
-    df_top15[['排名', '縣市', '行政區', '綜合便利性得分', '分類']], 
-    use_container_width=True, 
-    hide_index=True
+# --- 8. 渲染 Plotly 多維度雷達對比圖 ---
+import plotly.graph_objects as go
+
+categories = ['🏥 醫療資源', '🚌 交通機能', '🎓 教育資源', '🏪 生活機能']
+
+fig = go.Figure()
+
+# 繪製 A 區區塊
+fig.add_trace(go.Scatterpolar(
+    r=area_A_scores + [area_A_scores[0]],  # 首尾相連閉合曲線
+    theta=categories + [categories[0]],
+    fill='toself',
+    name=f"區域 A: {selected_county}{selected_town} ({final_score}分)",
+    line_color='#FF4B4B'
+))
+
+# 繪製 B 區區塊
+fig.add_trace(go.Scatterpolar(
+    r=area_B_scores + [area_B_scores[0]],
+    theta=categories + [categories[0]],
+    fill='toself',
+    name=f"區域 B: {pk_county}{pk_town} ({pk_final_score}分)",
+    line_color='#1C83E1'
+))
+
+fig.update_layout(
+    polar=dict(
+        radialaxis=dict(visible=True, range=[0, 100])  # 固定雷達圖範圍 0~100 分
+    ),
+    showlegend=True,
+    margin=dict(l=40, r=40, t=20, b=40),
+    height=450
 )
+
+# 顯示雷達圖與勝負數據
+col_chart, col_res = st.columns([1.2, 0.8])
+
+with col_chart:
+    st.plotly_chart(fig, use_container_width=True)
+
+with col_res:
+    st.subheader("📊 橫向評比結論")
+    st.write(f"**綜合得分對決：**")
+    st.write(f"🔴 {selected_town}：`{final_score} 分` ⚡ 🔵 {pk_town}：`{pk_final_score} 分`")
+    
+    # 自動判斷贏家
+    if final_score > pk_final_score:
+        st.success(f"🏆 綜合評比由 **{selected_county}{selected_town}** 勝出！")
+    elif final_score < pk_final_score:
+        st.success(f"🏆 綜合評比由 **{pk_county}{pk_town}** 勝出！")
+    else:
+        st.warning("⚖️ 兩區域在當前偏好權重下，綜合便利性平分秋色！")
+        
+    st.markdown("""
+    **💡 簡報亮點提示：**
+    您可以隨時調整側邊欄的**使用者權重**。雷達圖會即時重新運算並改變形狀，這能完美展現系統如何因應不同的『移居需求』，給出動態的跨區評估建議。
+    """)
