@@ -206,7 +206,7 @@ def get_live_amenity_data(lat, lon, radius=3000):
       node["shop"="convenience"](around:{radius},{lat},{lon});
       node["shop"="supermarket"](around:{radius},{lat},{lon});
       node["amenity"="fast_food"](around:{radius},{lat},{lon});
-      node["shop"~"department_store|mall|plaza"](around:{radius},{lat},{lon});
+      node["shop"~"department_store|mall|plaza|hypermarket"](around:{radius},{lat},{lon});
       node["amenity"="marketplace"](around:{radius},{lat},{lon});
       node["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
       node["leisure"~"park|playground"](around:{radius},{lat},{lon});
@@ -227,7 +227,7 @@ def get_live_amenity_data(lat, lon, radius=3000):
             if shop == "convenience": counts["conv"] += 1
             elif shop == "supermarket": counts["super"] += 1
             elif amenity == "fast_food": counts["fast"] += 1
-            elif shop in ["department_store", "mall"]: counts["mall"] += 1
+            elif shop in ["department_store", "mall", "plaza", "hypermarket"]: counts["mall"] += 1
             elif amenity == "marketplace": counts["market"] += 1
             elif amenity in ["bank", "post_office"]: counts["bank"] += 1
             elif leisure in ["park", "playground"]: counts["park"] += 1
