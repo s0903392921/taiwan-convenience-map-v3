@@ -198,37 +198,59 @@ def load_perfect_liudu_data():
 df_static = load_perfect_liudu_data()
 
 # --- 2. 即時查詢 OSM 7 大生活機能函數 ---
-import time
 import requests
+import streamlit as st
 
 def get_live_amenity_data(lat, lon, radius=3000):
-    # 🌐 準備多個官方認證的 Overpass 鏡像伺服器
-    endpoints = [
-        "https://overpass.openstreetmap.fr/api/interpreter",       
-        "https://overpass.kumi.systems/api/interpreter", # 台灣/亞洲友好分流
-        "https://overpass.nchc.org.tw/api/interpreter",   # 某些學術機構或歐美分流 (依當時可用清單)
-    ]
+    url = "https://overpass-api.de/api/interpreter"
     
+    # 🚀 終極優化：將 node 改為 nwr (Nodes, Ways, Relations)
+    # 這樣一來，無論是大型百貨「建築物面」、還是巨型都市公園，通通都能被雷達掃描到！
     query = f"""
-    [out:json][timeout:10];
+    [out:json][timeout:15];
     (
-      node(around:{radius},{lat},{lon})["amenity"];
-      node(around:{radius},{lat},{lon})["leisure"="park"];
+      nwr["shop"="convenience"](around:{radius},{lat},{lon});
+      nwr["shop"="supermarket"](around:{radius},{lat},{lon});
+      nwr["amenity"="fast_food"](around:{radius},{lat},{lon});
+      nwr["shop"~"department_store|mall|commercial|hypermarket"](around:{radius},{lat},{lon});
+      nwr["amenity"="marketplace"](around:{radius},{lat},{lon});
+      nwr["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
+      nwr["leisure"~"park|playground"](around:{radius},{lat},{lon});
     );
-    out count;
+    out tags;
     """
-    
-    # 嘗試每一台伺服器
-    for url in endpoints:
-        try:
-            response = requests.post(url, data=query, timeout=5) # 縮短超時時間，不行就換下一台
-            if response.status_code == 200:
-                return response.json()  # 成功就直接回傳！
-        except requests.exceptions.RequestException:
-            continue  # 這台失敗了，默默換下一台，使用者完全不會發現
+    try:
+        # 發送標準字典參數
+        response = requests.post(url, data={"data": query}, timeout=15)
+        
+        if response.status_code == 200:
+            data = response.json()
             
-    return None  # 全部都掛了才走 Fallback
-
+            counts = {"conv": 0, "super": 0, "fast": 0, "mall": 0, "market": 0, "bank": 0, "park": 0}
+            elements = data.get("elements", [])
+            
+            # 只有當真的有回傳地圖元素時，才進行分類加總
+            if elements:
+                for element in elements:
+                    tags = element.get("tags", {})
+                    shop = tags.get("shop")
+                    amenity = tags.get("amenity")
+                    leisure = tags.get("leisure")
+                    
+                    if shop == "convenience": counts["conv"] += 1
+                    elif shop == "supermarket": counts["super"] += 1
+                    elif amenity == "fast_food": counts["fast"] += 1
+                    elif shop in ["department_store", "mall", "commercial", "hypermarket"]: counts["mall"] += 1
+                    elif amenity == "marketplace": counts["market"] += 1
+                    elif amenity in ["bank", "post_office"]: counts["bank"] += 1
+                    elif leisure in ["park", "playground"]: counts["park"] += 1
+                
+                return counts
+    except Exception as e:
+        # 可在本地終端機印出錯誤訊息，方便你除錯
+        print(f"API 連線異常原因: {e}")
+        
+    return None
 # --- 3. 介面與連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
 with col_select1:
