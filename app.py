@@ -48,8 +48,6 @@ def get_live_amenity_data(lat, lon, radius=3000):
 # --- 2. 靜態真實資料庫 (已完全填滿解鎖六都全部行政區，共 152 個區) ---
 @st.cache_data
 def load_perfect_liudu_data():
-    # 資料欄位定義: 
-    # (行政區, 面積, 緯度, 經度, 分類, 精確公車處, 精確捷運站, 精確台鐵站, 精確高鐵站, 精確交流道, 精確國內機場, 精確國際機場, 精確YouBike站, 國小, 國高中, 大學, 圖書館, 醫學中心, 區域醫院, 地區醫院, 診所, 藥局)
     raw_cities = {
         "臺北市": [
             ("大安區", 11.36, 25.026, 121.543, "core", 185, 11, 0, 0, 0, 0, 0, 162, 14, 11, 3, 6, 1, 2, 2, 452, 128),
@@ -87,7 +85,6 @@ def load_perfect_liudu_data():
             ("石碇區", 144.35, 24.992, 121.657, "rural", 28, 0, 0, 0, 1, 0, 0, 10, 3, 1, 0, 1, 0, 0, 0, 5, 2),
             ("坪林區", 170.84, 24.937, 121.711, "rural", 22, 0, 0, 0, 1, 0, 0, 8, 2, 1, 0, 1, 0, 0, 0, 4, 1),
             ("烏來區", 321.13, 24.864, 121.551, "rural", 15, 0, 0, 0, 0, 0, 0, 5, 2, 1, 0, 1, 0, 0, 0, 3, 1),
-            ("永和區", 5.71, 25.008, 121.516, "core", 110, 1, 0, 0, 0, 0, 0, 72, 8, 4, 0, 2, 0, 1, 2, 220, 88),
             ("瑞芳區", 70.73, 25.109, 121.805, "rural", 82, 0, 4, 0, 1, 0, 0, 24, 9, 3, 0, 2, 0, 0, 1, 32, 12),
             ("萬里區", 63.37, 25.175, 121.689, "rural", 45, 0, 0, 0, 0, 0, 0, 12, 3, 1, 0, 1, 0, 0, 0, 9, 4),
             ("金山區", 49.21, 25.222, 121.638, "rural", 52, 0, 0, 0, 0, 0, 0, 15, 4, 1, 0, 1, 0, 0, 1, 15, 6),
@@ -215,7 +212,6 @@ def load_perfect_liudu_data():
             ("大樹區", 66.98, 22.693, 120.431, "rural", 62, 0, 2, 0, 0, 0, 0, 20, 7, 1, 0, 1, 0, 0, 0, 25, 9),
             ("大寮區", 71.04, 22.605, 120.395, "suburb", 142, 1, 0, 0, 1, 0, 0, 64, 11, 3, 1, 1, 0, 0, 1, 110, 34),
             ("林園區", 32.29, 22.508, 120.396, "suburb", 95, 0, 0, 0, 0, 0, 0, 38, 7, 2, 0, 1, 0, 0, 1, 68, 22),
-            ("鳥松區", 24.59, 22.659, 120.364, "suburb", 78, 0, 0, 0, 0, 0, 0, 31, 3, 1, 1, 1, 1, 0, 0, 38, 12),
             ("燕巢區", 65.39, 22.793, 120.362, "rural", 72, 0, 0, 0, 2, 0, 0, 25, 5, 0, 3, 1, 0, 0, 1, 32, 9),
             ("田寮區", 92.68, 22.868, 120.361, "rural", 18, 0, 0, 0, 1, 0, 0, 4, 3, 0, 0, 1, 0, 0, 0, 4, 1),
             ("阿蓮區", 34.61, 22.884, 120.328, "rural", 44, 0, 0, 0, 0, 0, 0, 15, 4, 1, 0, 1, 0, 0, 0, 29, 10),
@@ -223,7 +219,6 @@ def load_perfect_liudu_data():
         ]
     }
     
-    # 這裡我們補上處理，避免一些極端的漏網之區
     data = []
     for county, towns in raw_cities.items():
         for town, area, lat, lon, t_type, bus, mrt, train, hsr, ic, dom_ap, int_ap, ub, elem, high, univ, lib, med_center, regional_h, local_h, clinic, pharm in towns:
@@ -235,11 +230,11 @@ def load_perfect_liudu_data():
                 "Elementary_Schools": elem, "High_Schools": high, "Universities": univ, "Libraries": lib,
                 "Medical_Centers": med_center, "Regional_Hospitals": regional_h, "Local_Hospitals": local_h, "Clinics": clinic, "Pharmacies": pharm
             })
-    return pd.DataFrame(data)
+    return pd.DataFrame(data).drop_duplicates(subset=['COUNTYNAME', 'TOWNNAME'])
 
 df_static = load_perfect_liudu_data()
 
-# --- 3. 介面與連動下拉選單 (自動生成六都全行政區選項) ---
+# --- 3. 介面與連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
 with col_select1:
     selected_county = st.selectbox("🗺️ 請選擇直轄市：", ["臺北市", "新北市", "桃園市", "臺中市", "臺南市", "高雄市"])
@@ -269,28 +264,29 @@ if osm_res:
         osm_res["conv"], osm_res["super"], osm_res["fast"], osm_res["mall"], osm_res["market"], osm_res["bank"], osm_res["park"]
     )
 else:
+    # OSM 回傳失敗時的靜態預設值
     if static_target['Type'] == "core":
         c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 135, 16, 12, 4, 3, 22, 14
     else:
         c_stores, s_markets, f_foods, m_malls, t_markets, b_banks, p_parks = 42, 5, 2, 0, 1, 6, 4
 
-# --- 5. 機能密度與分數模型計算（全面改為真實精確數值） ---
-area = static_target['Area_SqKm']
+# --- 5. 機能密度與分數模型計算 ---
+area = static_target['Area_SqKm'] if static_target['Area_SqKm'] > 0 else 1.0
 
-# 交通密度：完全使用真實精密數值
-trans_density = (static_target['Bus_Stations'] * 2 + static_target['MRT_Stations'] * 6 + static_target['Train_Stations'] * 12 + static_target['HSR_Stations'] * 16 + static_target['Interchanges'] * 10 + static_target['Domestic_Airports'] * 12 + 
-        static_target['International_Airports'] * 18 + static_target['UBike_Stations'] * 1) / area
+# 各項指標密度化
+trans_density = (static_target['Bus_Stations'] * 2 + static_target['MRT_Stations'] * 6 + static_target['Train_Stations'] * 12 + static_target['HSR_Stations'] * 16 + static_target['Interchanges'] * 10 + static_target['Domestic_Airports'] * 12 + static_target['International_Airports'] * 18 + static_target['UBike_Stations'] * 1) / area
 med_density = (static_target['Medical_Centers'] * 18 + static_target['Regional_Hospitals'] * 14 + static_target['Local_Hospitals'] * 10 + static_target['Clinics'] * 6 + static_target['Pharmacies'] * 2) / area
-# 教育密度：完美導入圖書館權重統計
 edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools'] * 3 + static_target['Universities'] * 15 + static_target['Libraries'] * 8) / area
 
-life_score_weight = (c_stores * 4 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
+# 🚀 關鍵修正：將生活機能轉化為「密度」，避免大面積小數量的地區與核心區分數全部卡死
+life_score_weight = (c_stores * 3 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
+life_density = life_score_weight / area
 
-# 飽和轉換模型分數
+# 飽和轉換模型分數 (調整分母常數，確保分數過渡自然、高低拉開)
 med_score = round(100 * (med_density / (med_density + 13)), 1)
 trans_score = round(100 * (trans_density / (trans_density + 10)), 1)
-edu_score = round(100 * (edu_density / (edu_density + 1.5)), 2)
-life_score = round(100 * (life_score_weight / (life_score_weight + 120)), 1)
+edu_score = round(100 * (edu_density / (edu_density + 1.5)), 1)
+life_score = round(100 * (life_density / (life_density + 8.0)), 1)
 
 final_score = round(life_score * (w_store/100) + trans_score * (w_transport/100) + med_score * (w_medical/100) + edu_score * (w_school/100), 1)
 
@@ -326,13 +322,13 @@ with col_dash:
     with tab3:
         st.write(f"**教育資源評分：{edu_score} 分**")
         st.markdown(f"🎒 **國民小學**：`{static_target['Elementary_Schools']} 所` *(權重 × 1)*")
-        st.markdown(f"🏫 **國高中與職校**：`{static_target['High_Schools']} 所` *(權重 × 5)*")
+        st.markdown(f"🏫 **國高中與職校**：`{static_target['High_Schools']} 所` *(權重 × 3)*")
         st.markdown(f"🎓 **大專院校/大學**：`{static_target['Universities']} 所` *(權重 × 15)*")
         st.markdown(f"📚 **公共圖書館**：`{static_target['Libraries']} 所` *(權重 × 8)*")
         
     with tab4:
         st.write(f"**生活機能評分：{life_score} 分**")
-        st.markdown(f"🏪 **連鎖便利商店**：`{c_stores} 家` *(權重 × 4)*")
+        st.markdown(f"🏪 **連鎖便利商店**：`{c_stores} 家` *(權重 × 3)*")
         st.markdown(f"🍏 **連鎖超級市場**：`{s_markets} 間` *(權重 × 6)*")
         st.markdown(f"🍔 **連鎖速食餐廳**：`{f_foods} 間` *(權重 × 5)*")
         st.markdown(f"🏢 **百貨商場/量販**：`{m_malls} 間` *(權重 × 15)*")
@@ -355,16 +351,14 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
     leaderboard_list = []
     
     for idx, row in df_static.iterrows():
-        r_area = row['Area_SqKm']
-        if r_area <= 0:
-            r_area = 1.0
+        r_area = row['Area_SqKm'] if row['Area_SqKm'] > 0 else 1.0
         
-        # 🚀 修正 1：排行榜的交通密度權重，與第 5 區塊完全對齊，包含加計機場、公車/UBike 權重同步
+        # 1. 排行榜各項密度計算 (與上方完全同步)
         r_trans_density = (row['Bus_Stations'] * 2 + row['MRT_Stations'] * 6 + row['Train_Stations'] * 12 + row['HSR_Stations'] * 16 + row['Interchanges'] * 10 + row['Domestic_Airports'] * 12 + row['International_Airports'] * 18 + row['UBike_Stations'] * 1) / r_area
         r_med_density = (row['Medical_Centers'] * 18 + row['Regional_Hospitals'] * 14 + row['Local_Hospitals'] * 10 + row['Clinics'] * 6 + row['Pharmacies'] * 2) / r_area
         r_edu_density = (row['Elementary_Schools'] + row['High_Schools'] * 3 + row['Universities'] * 15 + row['Libraries'] * 8) / r_area
         
-        # 判斷是否為當前選取的行政區，如果是則抓取 OSM 即時商圈權重，否則抓靜態預設值
+        # 2. 生活機能分支判斷 (若是選中區拿即時權重，否則依照核心/非核心拿預設權重)
         if row['COUNTYNAME'] == selected_county and row['TOWNNAME'] == selected_town:
             r_life_weight = life_score_weight
         else:
@@ -372,12 +366,15 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
                 r_life_weight = (135 * 4 + 16 * 6 + 12 * 5 + 4 * 15 + 3 * 6 + 22 * 5 + 14 * 3)
             else:
                 r_life_weight = (42 * 4 + 5 * 6 + 2 * 5 + 0 * 15 + 1 * 6 + 6 * 5 + 4 * 3)
-                
-        # 🚀 修正 2：排行榜的飽和分母常數同步調小（8, 6, 1.2, 80），分數集體調高且兩邊不打架
+        
+        # 🚀 關鍵修正：排行榜內也同步將生活機能進行「密度化」處理，解除集體 68.1 分魔咒
+        r_life_density = r_life_weight / r_area
+        
+        # 3. 飽和轉換公式同步
         r_med_score = 100 * (r_med_density / (r_med_density + 13))
         r_trans_score = 100 * (r_trans_density / (r_trans_density + 10))
         r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.5))
-        r_life_score = 100 * (r_life_weight / (r_life_weight + 120))
+        r_life_score = 100 * (r_life_density / (r_life_density + 8.0))
         
         # 計算最終加權總分
         r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
