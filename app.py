@@ -204,7 +204,7 @@ import requests
 def get_live_amenity_data(lat, lon, radius=3000):
     # 🌐 準備多個官方認證的 Overpass 鏡像伺服器
     endpoints = [
-        "https://overpass-api.de/api/interpreter",       # 德國 (主力)
+        "https://overpass.openstreetmap.fr/api/interpreter",       
         "https://overpass.kumi.systems/api/interpreter", # 台灣/亞洲友好分流
         "https://overpass.nchc.org.tw/api/interpreter",   # 某些學術機構或歐美分流 (依當時可用清單)
     ]
