@@ -206,7 +206,7 @@ def get_live_amenity_data(lat, lon, radius=3000):
       node["shop"="convenience"](around:{radius},{lat},{lon});
       node["shop"="supermarket"](around:{radius},{lat},{lon});
       node["amenity"="fast_food"](around:{radius},{lat},{lon});
-      node["shop"~"department_store|mall"](around:{radius},{lat},{lon});
+      node["shop"~"department_store|mall|plaza"](around:{radius},{lat},{lon});
       node["amenity"="marketplace"](around:{radius},{lat},{lon});
       node["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
       node["leisure"~"park|playground"](around:{radius},{lat},{lon});
