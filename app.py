@@ -280,7 +280,6 @@ trans_density = (static_target['Bus_Stations'] * 2 + static_target['MRT_Stations
 med_density = (static_target['Medical_Centers'] * 18 + static_target['Regional_Hospitals'] * 14 + static_target['Local_Hospitals'] * 10 + static_target['Clinics'] * 6 + static_target['Pharmacies'] * 2) / area
 edu_density = (static_target['Elementary_Schools'] + static_target['High_Schools'] * 3 + static_target['Universities'] * 15 + static_target['Libraries'] * 8) / area
 
-# 🚀 關鍵修正：將生活機能轉化為「密度」，避免大面積小數量的地區與核心區分數全部卡死
 life_score_weight = (c_stores * 3 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
 life_density = life_score_weight / area
 
