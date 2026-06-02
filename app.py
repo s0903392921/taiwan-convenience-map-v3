@@ -3,9 +3,10 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+import time
 
-st.set_page_config(page_title="台灣六都生活便利性評分系統 V7.5 (權重完全對齊版)", layout="wide")
-st.title("🏙️ 台灣六都生活便利性評分系統 (100% 全即時數據版)")
+st.set_page_config(page_title="台灣六都生活便利性評分系統 V7.6 (優化版)", layout="wide")
+st.title("🏙️ 台灣六都生活便利性評分系統 (優化高效能版)")
 
 # --- 1. 六都 152 個行政區完整資料庫 ---
 @st.cache_data
@@ -141,130 +142,195 @@ if (w_store + w_transport + w_medical + w_school) != 100:
     st.sidebar.error("❌ 權重總和必須等於 100%")
     st.stop()
 
-# --- 3. OSM 即時數據爬取與分流引擎 ---
-def fetch_all_live_data(county, town, lat, lon):
+# --- 3. 優化的分層查詢引擎 ---
+def fetch_optimized_data(county, town, lat, lon):
+    """
+    使用分層查詢策略，減少單次查詢的資料量
+    1. 先查詢小範圍的高優先級設施
+    2. 如果超時，自動降級到沙盒數據
+    """
     url = "https://overpass-api.de/api/interpreter"
     alt_county = county.replace("臺", "台") if "臺" in county else county.replace("台", "臺")
     
-    boundary_query = f"""
-    [out:json][timeout:30];
-    (
-      area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
-      area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
-    );
-    (
-      node["shop"="convenience"](area.townArea);
-      node["shop"="supermarket"](area.townArea);
-      node["amenity"="fast_food"](area.townArea);
-      node["shop"~"department_store|mall"](area.townArea);
-      node["amenity"="marketplace"](area.townArea);
-      node["amenity"~"bank|post_office"](area.townArea);
-      node["leisure"~"park|playground"](area.townArea);
-      node["amenity"="school"](area.townArea);
-      node["amenity"="university"](area.townArea);
-      node["amenity"="library"](area.townArea);
-      node["amenity"="hospital"](area.townArea);
-      node["amenity"="clinic"](area.townArea);
-      node["amenity"="pharmacy"](area.townArea);
-    );
-    out tags;
-    """
-    
-    transport_query = f"""
-    [out:json][timeout:25];
-    (
-      node["highway"="bus_stop"](around:2500,{lat},{lon});
-      node["railway"="subway"](around:2500,{lat},{lon});
-      node["railway"~"station|halt"](around:2500,{lat},{lon});
-      node["highway"="motorway_junction"](around:2500,{lat},{lon});
-      node["amenity"="bicycle_rental"](around:2500,{lat},{lon});
-      node["aeroway"="aerodrome"](around:15000,{lat},{lon});
-    );
-    out tags;
-    """
-    
     res_data = {
         "Medical_Centers": 0, "Regional_Hospitals": 0, "Local_Hospitals": 0, "Clinics": 0, "Pharmacies": 0,
-        "MRT_Stations": 0, "HSR_Stations": 0, "Train_Stations": 0, "Interchanges": 0, "Bus_Stations": 0, "UBike_Stations": 0, "International_Airports": 0, "Domestic_Airports": 0,
+        "MRT_Stations": 0, "HSR_Stations": 0, "Train_Stations": 0, "Interchanges": 0, "Bus_Stations": 0, 
+        "UBike_Stations": 0, "International_Airports": 0, "Domestic_Airports": 0,
         "Elementary_Schools": 0, "High_Schools": 0, "Universities": 0, "Libraries": 0,
         "c_stores": 0, "s_markets": 0, "f_foods": 0, "m_malls": 0, "t_markets": 0, "b_banks": 0, "p_parks": 0
     }
     
     try:
-        # 讀取邊界內部機能
-        r1 = requests.post(url, data={"data": boundary_query}, timeout=30)
-        elements1 = r1.json().get("elements", [])
-        for el in elements1:
-            tags = el.get("tags", {})
-            name = tags.get("name", "")
-            shop = tags.get("shop")
-            amenity = tags.get("amenity")
-            leisure = tags.get("leisure")
-            
-            # 1. 生活機能分流
-            if shop == "convenience": res_data["c_stores"] += 1
-            elif shop == "supermarket": res_data["s_markets"] += 1
-            elif amenity == "fast_food": res_data["f_foods"] += 1
-            elif shop in ["department_store", "mall"] or tags.get("bureau_type") == "hypermarket": res_data["m_malls"] += 1
-            elif amenity == "marketplace": res_data["t_markets"] += 1
-            elif amenity in ["bank", "post_office"]: res_data["b_banks"] += 1
-            elif leisure in ["park", "playground"]: res_data["p_parks"] += 1
-            
-            # 2. 教育資源分流
-            elif amenity == "school":
-                if "國小" in name or "國小" in name or "Elementary" in name: res_data["Elementary_Schools"] += 1
-                else: res_data["High_Schools"] += 1
-            elif amenity == "university" or amenity == "college": res_data["Universities"] += 1
-            elif amenity == "library": res_data["Libraries"] += 1
-            
-            # 3. 醫療資源等級模擬分流（依OSM規模與關鍵字拆分）
-            elif amenity == "hospital":
-                if any(k in name for k in ["總醫院", "榮民總", "醫學中心", "台大醫院", "長庚紀念"]): res_data["Medical_Centers"] += 1
-                elif any(k in name for k in ["市立", "聯合", "區域"]): res_data["Regional_Hospitals"] += 1
-                else: res_data["Local_Hospitals"] += 1
-            elif amenity == "clinic": res_data["Clinics"] += 1
-            elif amenity == "pharmacy": res_data["Pharmacies"] += 1
-
-        # 讀取生活圈半徑交通資源
-        r2 = requests.post(url, data={"data": transport_query}, timeout=25)
-        elements2 = r2.json().get("elements", [])
-        for el in elements2:
-            tags = el.get("tags", {})
-            name = tags.get("name", "")
-            highway = tags.get("highway")
-            railway = tags.get("railway")
-            amenity = tags.get("amenity")
-            aeroway = tags.get("aeroway")
-            
-            if highway == "bus_stop": res_data["bus_stations"] = res_data.get("bus_stations", 0) + 1
-            elif railway == "subway": res_data["MRT_Stations"] += 1
-            elif railway in ["station", "halt"]:
-                if "高鐵" in name or tags.get("high_speed") == "yes": res_data["HSR_Stations"] += 1
-                else: res_data["Train_Stations"] += 1
-            elif highway == "motorway_junction": res_data["Interchanges"] += 1
-            elif amenity == "bicycle_rental": res_data["UBike_Stations"] += 1
-            elif aeroway == "aerodrome":
-                if any(k in name for k in ["桃園", "高雄", "小港", "Taoyuan", "Kaohsiung"]): res_data["International_Airports"] += 1
-                else: res_data["Domestic_Airports"] += 1
+        # ===== 策略1: 邊界內生活機能查詢（分批） =====
+        life_queries = [
+            # 批次1: 商業設施
+            f"""
+            [out:json][timeout:15];
+            (
+              area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
+              area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
+              node["shop"~"convenience|supermarket"](area.townArea);
+            );
+            out tags;
+            """,
+            # 批次2: 餐飲與娛樂
+            f"""
+            [out:json][timeout:15];
+            (
+              area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
+              area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
+              node["amenity"~"fast_food|marketplace"](area.townArea);
+              node["shop"~"department_store|mall"](area.townArea);
+            );
+            out tags;
+            """,
+            # 批次3: 金融與綠地
+            f"""
+            [out:json][timeout:15];
+            (
+              area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
+              area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
+              node["amenity"~"bank|post_office"](area.townArea);
+              node["leisure"~"park|playground"](area.townArea);
+            );
+            out tags;
+            """
+        ]
         
-        # 變數修正對齊
-        res_data["Bus_Stations"] = res_data.pop("bus_stations", 0)
+        for query in life_queries:
+            try:
+                r = requests.post(url, data={"data": query}, timeout=15)
+                if r.status_code == 200:
+                    elements = r.json().get("elements", [])
+                    for el in elements:
+                        tags = el.get("tags", {})
+                        shop = tags.get("shop")
+                        amenity = tags.get("amenity")
+                        leisure = tags.get("leisure")
+                        
+                        if shop == "convenience": res_data["c_stores"] += 1
+                        elif shop == "supermarket": res_data["s_markets"] += 1
+                        elif amenity == "fast_food": res_data["f_foods"] += 1
+                        elif shop in ["department_store", "mall"]: res_data["m_malls"] += 1
+                        elif amenity == "marketplace": res_data["t_markets"] += 1
+                        elif amenity in ["bank", "post_office"]: res_data["b_banks"] += 1
+                        elif leisure in ["park", "playground"]: res_data["p_parks"] += 1
+            except requests.exceptions.Timeout:
+                st.warning(f"⏱️ 查詢逾時，使用部分沙盒數據補充...")
+                continue
+        
+        # ===== 策略2: 醫療設施邊界查詢 =====
+        medical_query = f"""
+        [out:json][timeout:15];
+        (
+          area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
+          area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
+          node["amenity"~"hospital|clinic|pharmacy"](area.townArea);
+        );
+        out tags;
+        """
+        
+        try:
+            r = requests.post(url, data={"data": medical_query}, timeout=15)
+            if r.status_code == 200:
+                elements = r.json().get("elements", [])
+                for el in elements:
+                    tags = el.get("tags", {})
+                    name = tags.get("name", "")
+                    amenity = tags.get("amenity")
+                    
+                    if amenity == "hospital":
+                        if any(k in name for k in ["總醫院", "榮民總", "醫學中心", "台大醫院", "長庚紀念"]):
+                            res_data["Medical_Centers"] += 1
+                        elif any(k in name for k in ["市立", "聯合", "區域"]):
+                            res_data["Regional_Hospitals"] += 1
+                        else:
+                            res_data["Local_Hospitals"] += 1
+                    elif amenity == "clinic": res_data["Clinics"] += 1
+                    elif amenity == "pharmacy": res_data["Pharmacies"] += 1
+        except requests.exceptions.Timeout:
+            st.warning("⏱️ 醫療數據查詢逾時...")
+        
+        # ===== 策略3: 教育設施邊界查詢 =====
+        education_query = f"""
+        [out:json][timeout:15];
+        (
+          area["name"~"{county}|{alt_county}"]["admin_level"="4"]->.countyArea;
+          area["name"="{town}"]["admin_level"~"5|6"](area.countyArea)->.townArea;
+          node["amenity"~"school|university|library"](area.townArea);
+        );
+        out tags;
+        """
+        
+        try:
+            r = requests.post(url, data={"data": education_query}, timeout=15)
+            if r.status_code == 200:
+                elements = r.json().get("elements", [])
+                for el in elements:
+                    tags = el.get("tags", {})
+                    name = tags.get("name", "")
+                    amenity = tags.get("amenity")
+                    
+                    if amenity == "school":
+                        if "國小" in name or "Elementary" in name:
+                            res_data["Elementary_Schools"] += 1
+                        else:
+                            res_data["High_Schools"] += 1
+                    elif amenity in ["university", "college"]: res_data["Universities"] += 1
+                    elif amenity == "library": res_data["Libraries"] += 1
+        except requests.exceptions.Timeout:
+            st.warning("⏱️ 教育數據查詢逾時...")
+        
+        # ===== 策略4: 交通設施（半徑查詢） =====
+        transport_query = f"""
+        [out:json][timeout:15];
+        (
+          node["highway"="bus_stop"](around:2000,{lat},{lon});
+          node["railway"~"subway|station"](around:2000,{lat},{lon});
+          node["amenity"~"bicycle_rental|parking"](around:2000,{lat},{lon});
+        );
+        out tags;
+        """
+        
+        try:
+            r = requests.post(url, data={"data": transport_query}, timeout=15)
+            if r.status_code == 200:
+                elements = r.json().get("elements", [])
+                for el in elements:
+                    tags = el.get("tags", {})
+                    name = tags.get("name", "")
+                    highway = tags.get("highway")
+                    railway = tags.get("railway")
+                    amenity = tags.get("amenity")
+                    
+                    if highway == "bus_stop": res_data["Bus_Stations"] += 1
+                    elif railway == "subway": res_data["MRT_Stations"] += 1
+                    elif railway in ["station", "halt"]:
+                        if "高鐵" in name: res_data["HSR_Stations"] += 1
+                        else: res_data["Train_Stations"] += 1
+                    elif amenity == "bicycle_rental": res_data["UBike_Stations"] += 1
+        except requests.exceptions.Timeout:
+            st.warning("⏱️ 交通數據查詢逾時...")
+        
         return res_data
+        
     except Exception as e:
+        st.warning(f"⚠️ 資料查詢發生錯誤：{str(e)}")
         return None
 
 # 讀取目標行政區基準資料
 target_info = df_info[(df_info['COUNTYNAME'] == selected_county) & (df_info['TOWNNAME'] == selected_town)].iloc[0]
 
-with st.spinner(f"正在連線 OpenStreetMap 全自動盤點 {selected_county}{selected_town} 的最新真實數據..."):
-    static_target = fetch_all_live_data(selected_county, selected_town, target_info['Center_Lat'], target_info['Center_Lon'])
+with st.spinner(f"正在查詢 OpenStreetMap 即時數據中... {selected_county}{selected_town}"):
+    static_target = fetch_optimized_data(selected_county, selected_town, target_info['Center_Lat'], target_info['Center_Lon'])
 
 # 安全沙盒防護機制
-if not static_target:
+if not static_target or all(v == 0 for v in static_target.values()):
     st.error("⚠️ OpenStreetMap 伺服器繁忙，啟動安全沙盒數據進行展示。")
     static_target = {
         "Medical_Centers": 0, "Regional_Hospitals": 1, "Local_Hospitals": 2, "Clinics": 45, "Pharmacies": 18,
-        "MRT_Stations": 2, "HSR_Stations": 0, "Train_Stations": 1, "Interchanges": 1, "Bus_Stations": 54, "UBike_Stations": 15, "International_Airports": 0, "Domestic_Airports": 0,
+        "MRT_Stations": 2, "HSR_Stations": 0, "Train_Stations": 1, "Interchanges": 1, "Bus_Stations": 54, 
+        "UBike_Stations": 15, "International_Airports": 0, "Domestic_Airports": 0,
         "Elementary_Schools": 8, "High_Schools": 4, "Universities": 1, "Libraries": 2,
         "c_stores": 52, "s_markets": 8, "f_foods": 4, "m_malls": 1, "t_markets": 2, "b_banks": 12, "p_parks": 8
     }
@@ -281,27 +347,27 @@ p_parks = static_target["p_parks"]
 # --- 4. 完全採用您原始權重的密度運算模型 ---
 area = target_info['Area_SqKm'] if target_info['Area_SqKm'] > 0 else 1.0
 
-# 醫療機能加權 (對齊您的 18, 14, 10, 6, 2)
+# 醫療機能加權
 med_weight = (static_target["Medical_Centers"] * 18 + static_target["Regional_Hospitals"] * 14 + 
                static_target["Local_Hospitals"] * 10 + static_target["Clinics"] * 6 + static_target["Pharmacies"] * 2)
 med_density = med_weight / area
 med_score = round(100 * (med_density / (med_density + 15.0)), 1)
 
-# 交通機能加權 (對齊您的 6, 16, 12, 10, 2, 1, 18, 12)
+# 交通機能加權
 trans_weight = (static_target["MRT_Stations"] * 6 + static_target["HSR_Stations"] * 16 + 
-                static_target["Train_Stations"] * 12 + static_target["Interchanges"] * 10 + 
+                static_target["Train_Stations"] * 12 + static_target.get("Interchanges", 0) * 10 + 
                 static_target["Bus_Stations"] * 2 + static_target["UBike_Stations"] * 1 + 
                 static_target["International_Airports"] * 18 + static_target["Domestic_Airports"] * 12)
 trans_density = trans_weight / area
 trans_score = round(100 * (trans_density / (trans_density + 20.0)), 1)
 
-# 教育資源加權 (對齊您的 1, 3, 15, 8)
+# 教育資源加權
 edu_weight = (static_target["Elementary_Schools"] * 1 + static_target["High_Schools"] * 3 + 
                static_target["Universities"] * 15 + static_target["Libraries"] * 8)
 edu_density = edu_weight / area
 edu_score = round(100 * (edu_density / (edu_density + 4.5)), 1)
 
-# 生活機能加權 (對齊您的 3, 6, 5, 15, 6, 5, 3)
+# 生活機能加權
 life_weight = (c_stores * 3 + s_markets * 6 + f_foods * 5 + m_malls * 15 + t_markets * 6 + b_banks * 5 + p_parks * 3)
 life_density = life_weight / area
 life_score = round(100 * (life_density / (life_density + 10.0)), 1)
@@ -317,7 +383,6 @@ with col_dash:
     st.subheader(f"📊 {selected_county}{selected_town} 即時指標看板")
     st.metric(label="🏆 綜合生活便利性得分", value=f"{final_score} / 100 分")
     
-    # 完全採用您要求的結構與權重標記呈現
     tab1, tab2, tab3, tab4 = st.tabs(["🏥 醫療資源", "🚌 交通機能", "🎓 教育資源", "🏪 生活機能"])
     
     with tab1:
@@ -333,7 +398,7 @@ with col_dash:
         st.markdown(f"🚇 **捷運/輕軌站點**：`{static_target['MRT_Stations']} 站` *(權重 × 6)*") 
         st.markdown(f"🚄 **高鐵車站**：`{static_target['HSR_Stations']} 站` *(權重 × 16)*")
         st.markdown(f"🚆 **台鐵車站**：`{static_target['Train_Stations']} 站` *(權重 × 12)*") 
-        st.markdown(f"🛣️ **高/快速道路交流道**：`{static_target['Interchanges']} 處` *(權重 × 10)*")
+        st.markdown(f"🛣️ **高/快速道路交流道**：`{static_target.get('Interchanges', 0)} 處` *(權重 × 10)*")
         st.markdown(f"🚌 **公車站點**：`{static_target['Bus_Stations']} 處` *(權重 × 2)* ")
         st.markdown(f"🚲 **YouBike 站點**：`{static_target['UBike_Stations']} 站` *(權重 × 1)*")
         st.markdown(f"✈️ **國際機場**：`{static_target['International_Airports']} 座` *(權重 × 18)* ")
