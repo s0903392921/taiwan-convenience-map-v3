@@ -374,7 +374,7 @@ with st.spinner("正在動態計算全台行政區當前權重排名..."):
         r_med_score = 100 * (r_med_density / (r_med_density + 13))
         r_trans_score = 100 * (r_trans_density / (r_trans_density + 10))
         r_edu_score = 100 * (r_edu_density / (r_edu_density + 1.5))
-        r_life_score = 100 * (r_life_density / (r_life_density + 8.0))
+        r_life_score = 100 * (r_life_density / (r_life_density + 9.0))
         
         # 計算最終加權總分
         r_final = r_life_score * (w_store/100) + r_trans_score * (w_transport/100) + r_med_score * (w_medical/100) + r_edu_score * (w_school/100)
