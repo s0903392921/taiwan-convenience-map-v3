@@ -7,45 +7,8 @@ from streamlit_folium import st_folium
 st.set_page_config(page_title="台灣六都生活便利性評分系統 V6.0", layout="wide")
 st.title("🏙️ 台灣六都生活便利性評分系統 ")
 
-# --- 1. 即時查詢 OSM 7 大生活機能函數 ---
-def get_live_amenity_data(lat, lon, radius=3000):
-    url = "https://overpass-api.de/api/interpreter"
-    query = f"""
-    [out:json][timeout:15];
-    (
-      node["shop"="convenience"](around:{radius},{lat},{lon});
-      node["shop"="supermarket"](around:{radius},{lat},{lon});
-      node["amenity"="fast_food"](around:{radius},{lat},{lon});
-      node["shop"~"department_store|mall"](around:{radius},{lat},{lon});
-      node["amenity"="marketplace"](around:{radius},{lat},{lon});
-      node["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
-      node["leisure"~"park|playground"](around:{radius},{lat},{lon});
-    );
-    out tags;
-    """
-    try:
-        response = requests.post(url, data={"data": query}, timeout=15)
-        data = response.json()
-        
-        counts = {"conv": 0, "super": 0, "fast": 0, "mall": 0, "market": 0, "bank": 0, "park": 0}
-        for element in data.get("elements", []):
-            tags = element.get("tags", {})
-            shop = tags.get("shop")
-            amenity = tags.get("amenity")
-            leisure = tags.get("leisure")
-            
-            if shop == "convenience": counts["conv"] += 1
-            elif shop == "supermarket": counts["super"] += 1
-            elif amenity == "fast_food": counts["fast"] += 1
-            elif shop in ["department_store", "mall"]: counts["mall"] += 1
-            elif amenity == "marketplace": counts["market"] += 1
-            elif amenity in ["bank", "post_office"]: counts["bank"] += 1
-            elif leisure in ["park", "playground"]: counts["park"] += 1
-        return counts
-    except:
-        return None
 
-# --- 2. 靜態真實資料庫 (已完全填滿解鎖六都全部行政區，共 152 個區) ---
+# --- 1. 靜態真實資料庫 (已完全填滿解鎖六都全部行政區，共 152 個區) ---
 @st.cache_data
 def load_perfect_liudu_data():
     raw_cities = {
@@ -233,6 +196,45 @@ def load_perfect_liudu_data():
     return pd.DataFrame(data).drop_duplicates(subset=['COUNTYNAME', 'TOWNNAME'])
 
 df_static = load_perfect_liudu_data()
+
+# --- 2. 即時查詢 OSM 7 大生活機能函數 ---
+def get_live_amenity_data(lat, lon, radius=3000):
+    url = "https://overpass-api.de/api/interpreter"
+    query = f"""
+    [out:json][timeout:15];
+    (
+      node["shop"="convenience"](around:{radius},{lat},{lon});
+      node["shop"="supermarket"](around:{radius},{lat},{lon});
+      node["amenity"="fast_food"](around:{radius},{lat},{lon});
+      node["shop"~"department_store|mall"](around:{radius},{lat},{lon});
+      node["amenity"="marketplace"](around:{radius},{lat},{lon});
+      node["amenity"~"bank|post_office"](around:{radius},{lat},{lon});
+      node["leisure"~"park|playground"](around:{radius},{lat},{lon});
+    );
+    out tags;
+    """
+    try:
+        response = requests.post(url, data={"data": query}, timeout=15)
+        data = response.json()
+        
+        counts = {"conv": 0, "super": 0, "fast": 0, "mall": 0, "market": 0, "bank": 0, "park": 0}
+        for element in data.get("elements", []):
+            tags = element.get("tags", {})
+            shop = tags.get("shop")
+            amenity = tags.get("amenity")
+            leisure = tags.get("leisure")
+            
+            if shop == "convenience": counts["conv"] += 1
+            elif shop == "supermarket": counts["super"] += 1
+            elif amenity == "fast_food": counts["fast"] += 1
+            elif shop in ["department_store", "mall"]: counts["mall"] += 1
+            elif amenity == "marketplace": counts["market"] += 1
+            elif amenity in ["bank", "post_office"]: counts["bank"] += 1
+            elif leisure in ["park", "playground"]: counts["park"] += 1
+        return counts
+    except:
+        return None
+
 
 # --- 3. 介面與連動下拉選單 ---
 col_select1, col_select2 = st.columns(2)
