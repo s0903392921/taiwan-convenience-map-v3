@@ -232,8 +232,7 @@ def get_live_amenity_data(lat, lon, radius=3000):
             elif amenity in ["bank", "post_office"]: counts["bank"] += 1
             elif leisure in ["park", "playground"]: counts["park"] += 1
         return counts
-    except:
-        return None
+    
 
 
 # --- 3. 介面與連動下拉選單 ---
