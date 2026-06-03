@@ -204,8 +204,7 @@ import streamlit as st
 def get_live_amenity_data(lat, lon, radius=3000):
     url = "https://overpass-api.de/api/interpreter"
     
-    # 🚀 終極優化：將 node 改為 nwr (Nodes, Ways, Relations)
-    # 這樣一來，無論是大型百貨「建築物面」、還是巨型都市公園，通通都能被雷達掃描到！
+   
     query = f"""
     [out:json][timeout:15];
     (
