@@ -450,7 +450,7 @@ with col_chart:
     st.plotly_chart(fig, use_container_width=True)
 
 with col_res:
-    st.subheader("📊 橫向評比結論")
+    st.subheader("橫向評比結論")
     st.write(f"**綜合得分對決：**")
     st.write(f"🔴 {selected_town}：`{final_score} 分` ⚡ 🔵 {pk_town}：`{pk_final_score} 分`")
     
