@@ -359,7 +359,6 @@ with col_map:
 # --- 7. 雙區機能動態對比模組  ---
 st.markdown("---")
 st.header("⚖️ 雙行政區機能動態對比")
-st.caption("此模組將同時發動即時 API 請求，在相同的數據基準下，橫向評比兩個行政區的四大機能指標。")
 
 col_pk1, col_pk2 = st.columns([1, 1])
 
