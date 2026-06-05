@@ -8,7 +8,7 @@ st.set_page_config(page_title="台灣六都生活便利性評分系統 V6.0", la
 st.title("🏙️ 台灣六都生活便利性評分系統 ")
 
 
-# --- 1. 靜態真實資料庫 (已完全填滿解鎖六都全部行政區，共 152 個區) ---
+# --- 1. 靜態資料庫 
 @st.cache_data
 def load_perfect_liudu_data():
     raw_cities = {
@@ -228,7 +228,6 @@ def get_live_amenity_data(lat, lon, radius=3000):
             counts = {"conv": 0, "super": 0, "fast": 0, "mall": 0, "market": 0, "bank": 0, "park": 0}
             elements = data.get("elements", [])
             
-            # 只有當真的有回傳地圖元素時，才進行分類加總
             if elements:
                 for element in elements:
                     tags = element.get("tags", {})
@@ -246,7 +245,7 @@ def get_live_amenity_data(lat, lon, radius=3000):
                 
                 return counts
     except Exception as e:
-        # 可在本地終端機印出錯誤訊息，方便你除錯
+        # 可在本地終端機印出錯誤訊息，方便除錯
         print(f"API 連線異常原因: {e}")
         
     return None
@@ -362,7 +361,6 @@ st.markdown("---")
 st.header("⚖️ 雙行政區機能動態對比")
 st.caption("此模組將同時發動即時 API 請求，在相同的數據基準下，橫向評比兩個行政區的四大機能指標。")
 
-# 建立兩個下拉選單，讓使用者選擇要對比的 B 區域 (A 區域預設就是上面選定的區域)
 col_pk1, col_pk2 = st.columns([1, 1])
 
 with col_pk1:
@@ -384,12 +382,12 @@ with st.spinner(f"正在連線 OpenStreetMap 獲取 {pk_town} 最新數據並進
     pk_target = df_static[(df_static['COUNTYNAME'] == pk_county) & (df_static['TOWNNAME'] == pk_town)].iloc[0]
     pk_area = pk_target['Area_SqKm'] if pk_target['Area_SqKm'] > 0 else 1.0
     
-    # 2. B 區交通、醫療、教育密度計算 (與前面完全同步)
+    # 2. B 區交通、醫療、教育密度計算 
     pk_trans_density = (pk_target['Bus_Stations'] * 2 + pk_target['MRT_Stations'] * 6 + pk_target['Train_Stations'] * 12 + pk_target['HSR_Stations'] * 16 + pk_target['Interchanges'] * 10 + pk_target['Domestic_Airports'] * 12 + pk_target['International_Airports'] * 18 + pk_target['UBike_Stations'] * 1) / pk_area
     pk_med_density = (pk_target['Medical_Centers'] * 18 + pk_target['Regional_Hospitals'] * 14 + pk_target['Local_Hospitals'] * 10 + pk_target['Clinics'] * 6 + pk_target['Pharmacies'] * 2) / pk_area
     pk_edu_density = (pk_target['Elementary_Schools'] + pk_target['High_Schools'] * 3 + pk_target['Universities'] * 15 + pk_target['Libraries'] * 8) / pk_area
     
-    # 3. B 區即時生活機能抓取 (發動第二次 API 請求，確保數據新鮮度與 A 區一致)
+    # 3. B 區即時生活機能抓取
     pk_osm = get_live_amenity_data(pk_target['Center_Lat'], pk_target['Center_Lon'])
     if pk_osm:
         pk_life_weight = (pk_osm["conv"] * 3 + pk_osm["super"] * 6 + pk_osm["fast"] * 5 + pk_osm["mall"] * 15 + pk_osm["market"] * 6 + pk_osm["bank"] * 5 + pk_osm["park"] * 3)
@@ -421,7 +419,7 @@ fig = go.Figure()
 
 # 繪製 A 區區塊
 fig.add_trace(go.Scatterpolar(
-    r=area_A_scores + [area_A_scores[0]],  # 首尾相連閉合曲線
+    r=area_A_scores + [area_A_scores[0]], 
     theta=categories + [categories[0]],
     fill='toself',
     name=f"區域 A: {selected_county}{selected_town} ({final_score}分)",
